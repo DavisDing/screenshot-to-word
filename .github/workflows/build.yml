@@ -1,8 +1,9 @@
-name: Build Windows EXE
+name: Build Windows Executable
 
 on:
   push:
-    branches: [main]
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 jobs:
@@ -10,25 +11,35 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Setup Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
 
-    - name: Install dependencies
-      run: |
-        pip install -r requirements.txt
-        pip install pyinstaller
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
 
-    - name: Build EXE with PyInstaller
-      run: |
-        pyinstaller --onefile --noconsole test_capture_runner.py
+      - name: Build exe with PyInstaller
+        run: |
+          pyinstaller main.py --name "DesktopTestTool" --noconfirm --onefile
 
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: screenshot_tool_exe
-        path: dist/test_capture_runner.exe
+      - name: Upload executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: DesktopTestTool.exe
+          path: dist/DesktopTestTool.exe
+
+      - name: Create Release (with .exe)
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          name: Release ${{ github.ref_name }}
+          files: dist/DesktopTestTool.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
