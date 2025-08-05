@@ -9,7 +9,7 @@ import re
 import tempfile
 import uuid
 import threading
-from tkinter import Tk, Canvas, simpledialog, Button, Frame, Label, messagebox, Text
+from tkinter import Tk, Canvas, simpledialog, Button, Frame, Label, messagebox, Text, Listbox
 from PIL import Image, ImageTk
 from docx import Document
 from docx.shared import Inches
@@ -47,13 +47,33 @@ class ControlPanelWindow:
     def __init__(self):
         self.root = Tk()
         self.root.title("控制面板")
-        self.root.geometry("500x400+100+100")
+        self.root.geometry("700x500+100+100")
         self.root.attributes('-topmost', True)
 
-        self.text = Text(self.root, wrap='word', bg='black', fg='lime', font=("Consolas", 10))
-        self.text.pack(expand=True, fill='both', padx=10, pady=(10, 5))
+        # 用例列表
+        self.listbox = Listbox(self.root, height=10)
+        self.listbox.pack(fill='x', padx=10, pady=5)
+        for idx, row in df.iterrows():
+            if idx == 0:
+                continue
+            name = str(row[0]).strip()
+            status = str(row[2]).strip()
+            self.listbox.insert('end', f"{idx}. {name} - [{status}]")
 
-        Button(self.root, text='截图', command=self.trigger_screenshot).pack(pady=5)
+        # 截图预览
+        self.preview_label = Label(self.root, text="截图预览区", relief="groove", width=80, height=10, anchor="center")
+        self.preview_label.pack(padx=10, pady=5, fill='x')
+
+        # 日志输出
+        self.text = Text(self.root, wrap='word', bg='black', fg='lime', font=("Consolas", 10), height=10)
+        self.text.pack(expand=True, fill='both', padx=10, pady=5)
+
+        # 控制按钮栏
+        btn_frame = Frame(self.root)
+        btn_frame.pack(pady=5)
+        Button(btn_frame, text='截图', command=self.trigger_screenshot).pack(side='left', padx=10)
+        Button(btn_frame, text='跳过当前', command=self.skip_case).pack(side='left', padx=10)
+        Button(btn_frame, text='退出', command=self.root.quit).pack(side='left', padx=10)
 
         threading.Thread(target=self.root.mainloop, daemon=True).start()
 
@@ -64,6 +84,10 @@ class ControlPanelWindow:
         else:
             messagebox.showwarning("请先开始执行", "请点击主界面“开始执行”以进入用例截图流程。")
 
+    def skip_case(self):
+        self.log("用户点击跳过当前用例")
+        screenshot_event.set()  # 用于跳过截图流程，标记后主流程将继续
+
     def log(self, msg):
         timestamp = time.strftime("[%H:%M:%S]")
         line = f"{timestamp} {msg}"
@@ -73,6 +97,15 @@ class ControlPanelWindow:
             logging.info(msg)
         except Exception as e:
             print(f"日志显示失败: {e}")
+
+    def update_preview(self, img_path):
+        try:
+            img = Image.open(img_path)
+            img.thumbnail((400, 250))
+            self.tk_preview = ImageTk.PhotoImage(img)
+            self.preview_label.config(image=self.tk_preview, text='')
+        except Exception as e:
+            self.log(f"预览加载失败: {e}")
 
 # 标注工具
 class Annotator:
@@ -235,6 +268,7 @@ def run(progress_label):
 
                 try:
                     Annotator(tmp_path, img_path, word_path, verify_point)
+                    logwin.update_preview(img_path)
                 except Exception as e:
                     messagebox.showerror("标注错误", f"标注工具出错: {str(e)}")
                 finally:
