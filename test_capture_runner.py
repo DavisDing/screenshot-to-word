@@ -167,7 +167,6 @@ class Annotator:
 def run():
     global screenshot_triggered
     screenshot_triggered = threading.Event()
-    create_floating_screenshot_button()
     logwin = LogWindow()
     logwin.log(f"开始处理 Excel 文件：{EXCEL_PATH}")
     wb = load_workbook(EXCEL_PATH)
@@ -257,8 +256,7 @@ class MainWindow:
         create_floating_screenshot_button()
         self.root.destroy()
         messagebox.showinfo("启动提示", "截图工具已启动，将开始第一条未完成验证点。\n请按 F8 截图。")
-
-        run()
+        threading.Thread(target=run, daemon=True).start()
 
     def trigger_screenshot(self):
         global screenshot_triggered
