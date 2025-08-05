@@ -28,7 +28,7 @@ jobs:
         pyinstaller --onefile --noconsole test_capture_runner.py
 
     - name: Upload artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: screenshot_tool_exe
         path: dist/test_capture_runner.exe
