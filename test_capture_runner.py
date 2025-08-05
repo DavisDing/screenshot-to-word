@@ -14,6 +14,9 @@ from PIL import Image, ImageTk
 from docx import Document
 from docx.shared import Inches
 from openpyxl import load_workbook
+import logging
+
+screenshot_event = threading.Event()
 
 # 目录与日志文件
 INPUT_DIR = 'excel_input'
@@ -21,6 +24,14 @@ OUTPUT_DIR = 'output'
 EXECUTED_STATUS = '已执行'
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 LOG_FILE = os.path.join(OUTPUT_DIR, f"log_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt")
+
+# 设置日志
+logging.basicConfig(
+    filename=LOG_FILE,
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    datefmt='%H:%M:%S'
+)
 
 # 自动读取最新Excel文件
 xlsx_files = sorted(glob.glob(os.path.join(INPUT_DIR, '*.xlsx')), key=os.path.getmtime, reverse=True)
@@ -35,8 +46,8 @@ df.fillna('', inplace=True)
 def create_floating_screenshot_button():
     def do_capture():
         try:
-            if 'screenshot_triggered' in globals():
-                screenshot_triggered.set()
+            if screenshot_event:
+                screenshot_event.set()
                 return
             messagebox.showwarning("请先开始执行", "请点击主界面“开始执行”以进入用例截图流程。")
         except Exception as e:
@@ -48,11 +59,25 @@ def create_floating_screenshot_button():
     float_root.attributes("-topmost", True)
     float_root.resizable(False, False)
     Button(float_root, text="截图", command=do_capture).pack(expand=True, fill='both')
+    
+    # 使用 daemon=True 确保线程不会阻止程序退出
     threading.Thread(target=float_root.mainloop, daemon=True).start()
 
 # 日志窗口
 class LogWindow:
+    _instance = None
+    _lock = threading.Lock()
+
+    def __new__(cls):
+        with cls._lock:
+            if cls._instance is None:
+                cls._instance = super(LogWindow, cls).__new__(cls)
+            return cls._instance
+
     def __init__(self):
+        if hasattr(self, 'initialized'):
+            return
+        self.initialized = True
         self.root = Tk()
         self.root.title("操作日志")
         self.root.geometry("400x300+100+100")
@@ -61,26 +86,34 @@ class LogWindow:
         self.root.attributes('-topmost', True)
         self.log_lines = []
         # Add screenshot button at the end of __init__
-        Button(self.root, text='截图', command=lambda: screenshot_triggered.set()).pack(pady=5)
-        threading.Thread(target=self.root.mainloop, daemon=True).start()
+        Button(self.root, text='截图', command=self._trigger_screenshot).pack(pady=5)
+        # 在单独的线程中运行 GUI
+        self.thread = threading.Thread(target=self._run_gui, daemon=True)
+        self.thread.start()
 
-    def start_mainloop(self):
+    def _run_gui(self):
         try:
             self.root.mainloop()
-        except Exception:
-            pass
+        except Exception as e:
+            logging.error(f"日志窗口错误: {e}")
+
+    def _trigger_screenshot(self):
+        global screenshot_event
+        if screenshot_event:
+            screenshot_event.set()
+        else:
+            messagebox.showwarning("请先开始执行", "请点击主界面“开始执行”以进入用例截图流程。")
 
     def log(self, msg):
         timestamp = time.strftime("[%H:%M:%S]")
         line = f"{timestamp} {msg}"
-        self.text.insert('end', line + '\n')
-        self.text.see('end')
-        self.log_lines.append(line)
         try:
-            with open(LOG_FILE, 'a', encoding='utf-8') as f:
-                f.write(line + '\n')
+            self.text.insert('end', line + '\n')
+            self.text.see('end')
+            self.log_lines.append(line)
+            logging.info(msg)  # 同时写入文件日志
         except Exception as e:
-            print(f"日志写入失败: {e}")
+            print(f"日志显示失败: {e}")
 
 # 标注工具
 class Annotator:
@@ -146,99 +179,129 @@ class Annotator:
             self.canvas.postscript(file=temp_eps_path)
             img = Image.open(temp_eps_path)
             img.save(self.save_path)
+        except Exception as e:
+            messagebox.showerror("保存错误", f"保存截图时出错: {str(e)}")
         finally:
             os.close(temp_eps_fd)
             if os.path.exists(temp_eps_path):
                 os.remove(temp_eps_path)
 
-        if os.path.exists(self.word_path):
-            doc = Document(self.word_path)
-        else:
-            doc = Document()
-            doc.add_heading(os.path.splitext(os.path.basename(self.word_path))[0], level=1)
-            doc.add_paragraph(self.case_text)
+        try:
+            try:
+                if os.path.exists(self.word_path):
+                    doc = Document(self.word_path)
+                else:
+                    doc = Document()
+                    doc.add_heading(os.path.splitext(os.path.basename(self.word_path))[0], level=1)
+                    doc.add_paragraph(self.case_text)
 
-        doc.add_picture(self.save_path, width=Inches(6))
-        doc.add_paragraph('')
-        doc.save(self.word_path)
-        self.root.destroy()
+                doc.add_picture(self.save_path, width=Inches(6))
+                doc.add_paragraph('')
+                doc.save(self.word_path)
+            except Exception as e:
+                messagebox.showerror("Word错误", f"保存Word文档时出错: {str(e)}")
+        finally:
+            self.root.destroy()
 
 # 主流程
 def run():
-    global screenshot_triggered
-    screenshot_triggered = threading.Event()
-    logwin = LogWindow()
-    logwin.log(f"开始处理 Excel 文件：{EXCEL_PATH}")
-    wb = load_workbook(EXCEL_PATH)
-    ws = wb.active
+    global screenshot_event
+    try:
+        logwin = LogWindow()
+        logwin.log(f"开始处理 Excel 文件：{EXCEL_PATH}")
+        
+        try:
+            wb = load_workbook(EXCEL_PATH)
+            ws = wb.active
+        except Exception as e:
+            messagebox.showerror("Excel错误", f"无法加载Excel文件: {str(e)}")
+            return
 
-    if not hasattr(run, "_hotkey_registered"):
-        keyboard.add_hotkey('F8', lambda: screenshot_triggered.set())
-        run._hotkey_registered = True
+        if not hasattr(run, "_hotkey_registered"):
+            keyboard.add_hotkey('F8', lambda: screenshot_event.set())
+            run._hotkey_registered = True
 
-    for idx, row in df.iterrows():
-        if idx == 0:
-            continue
-        file_name = str(row[0]).strip()
-        verify_point = str(row[1]).strip()
-        status = str(row[2]).strip()
-        if re.search(r'[<>:"/\\|?*\x00-\x1F]', file_name):
-            messagebox.showerror("文件名错误", f"无效的文件名: {file_name}")
-            continue
-        safe_file_name = os.path.normpath(file_name).replace(os.sep, '_')
+        for idx, row in df.iterrows():
+            if idx == 0:
+                continue
+            file_name = str(row[0]).strip()
+            verify_point = str(row[1]).strip()
+            status = str(row[2]).strip()
+            if re.search(r'[<>:"/\\|?*\x00-\x1F]', file_name):
+                messagebox.showerror("文件名错误", f"无效的文件名: {file_name}")
+                continue
+            safe_file_name = os.path.normpath(file_name).replace(os.sep, '_')
 
-        # 截图文件夹（以A列命名的子文件夹）
-        raw_dir = os.path.join(OUTPUT_DIR, safe_file_name)
-        os.makedirs(raw_dir, exist_ok=True)
+            # 截图文件夹（以A列命名的子文件夹）
+            raw_dir = os.path.join(OUTPUT_DIR, safe_file_name)
+            os.makedirs(raw_dir, exist_ok=True)
 
-        # Word文件直接放output根目录
-        word_path = os.path.join(OUTPUT_DIR, f"{safe_file_name}.docx")
+            # Word文件直接放output根目录
+            word_path = os.path.join(OUTPUT_DIR, f"{safe_file_name}.docx")
 
-        if status.lower() in ['passed', EXECUTED_STATUS]:
-            continue
-
-        logwin.log(f"[用例名称] {file_name}")
-        logwin.log(f"[验证点] {verify_point}")
-        messagebox.showinfo("验证点", verify_point)
-
-        while True:
-            screenshot_triggered.clear()
-            logwin.log("等待按 F8 或点击悬浮截图按钮开始截图...")
-            while not screenshot_triggered.is_set():
-                time.sleep(0.1)
-            messagebox.showinfo("截图中", "即将截图当前屏幕...")
-            logwin.log("已触发截图，开始截图...")
-            time.sleep(0.5)
-
-            try:
-                screenshot = pyautogui.screenshot()
-            except Exception as e:
-                messagebox.showerror("截图错误", f"截图失败: {str(e)}")
+            if status.lower() in ['passed', EXECUTED_STATUS]:
                 continue
 
-            count = len(glob.glob(os.path.join(raw_dir, "screenshot_*.png"))) + 1
-            img_path = os.path.join(raw_dir, f"screenshot_{count}.png")
-            tmp_path = os.path.join(raw_dir, f"temp_{uuid.uuid4().hex}.png")
-            screenshot.save(tmp_path)
+            logwin.log(f"[用例名称] {file_name}")
+            logwin.log(f"[验证点] {verify_point}")
+            messagebox.showinfo("验证点", verify_point)
 
-            try:
-                Annotator(tmp_path, img_path, word_path, verify_point)
-            finally:
-                if os.path.exists(tmp_path):
-                    os.remove(tmp_path)
+            while True:
+                screenshot_event.clear()
+                logwin.log("等待按 F8 或点击悬浮截图按钮开始截图...")
+                while not screenshot_event.is_set():
+                    time.sleep(0.1)
+                messagebox.showinfo("截图中", "即将截图当前屏幕...")
+                logwin.log("已触发截图，开始截图...")
+                time.sleep(0.5)
 
-            ws.cell(row=idx+2, column=3, value=EXECUTED_STATUS)
-            try:
-                wb.save(EXCEL_PATH)
-            except Exception as e:
-                messagebox.showerror("保存错误", f"Excel保存失败: {str(e)}")
-                continue
+                try:
+                    screenshot = pyautogui.screenshot()
+                except Exception as e:
+                    messagebox.showerror("截图错误", f"截图失败: {str(e)}")
+                    continue
 
-            choice = messagebox.askyesno("继续截图？", "是否继续截图？\n是 = 当前用例继续截图\n否 = 进入下一条")
-            if not choice:
-                break
+                count = len(glob.glob(os.path.join(raw_dir, "screenshot_*.png"))) + 1
+                img_path = os.path.join(raw_dir, f"screenshot_{count}.png")
+                tmp_path = os.path.join(raw_dir, f"temp_{uuid.uuid4().hex}.png")
+                
+                try:
+                    screenshot.save(tmp_path)
+                except Exception as e:
+                    messagebox.showerror("保存错误", f"临时文件保存失败: {str(e)}")
+                    continue
 
-    messagebox.showinfo("执行完成", "所有用例执行完毕！")
+                try:
+                    Annotator(tmp_path, img_path, word_path, verify_point)
+                except Exception as e:
+                    messagebox.showerror("标注错误", f"标注工具出错: {str(e)}")
+                finally:
+                    if os.path.exists(tmp_path):
+                        try:
+                            os.remove(tmp_path)
+                        except Exception as e:
+                            logwin.log(f"临时文件删除失败: {str(e)}")
+
+                try:
+                    ws.cell(row=idx+2, column=3, value=EXECUTED_STATUS)
+                    wb.save(EXCEL_PATH)
+                except Exception as e:
+                    messagebox.showerror("保存错误", f"Excel保存失败: {str(e)}")
+                    continue
+
+                try:
+                    choice = messagebox.askyesno("继续截图？", "是否继续截图？\n是 = 当前用例继续截图\n否 = 进入下一条")
+                except Exception as e:
+                    logwin.log(f"用户选择对话框错误: {str(e)}")
+                    choice = False  # 默认进入下一条
+                    
+                if not choice:
+                    break
+
+        messagebox.showinfo("执行完成", "所有用例执行完毕！")
+    except Exception as e:
+        messagebox.showerror("运行错误", f"运行中发生异常: {str(e)}")
+        logging.exception("运行异常")
 
 # 主界面
 class MainWindow:
@@ -253,15 +316,16 @@ class MainWindow:
         self.root.mainloop()
 
     def start(self):
+        global screenshot_event
         create_floating_screenshot_button()
         self.root.destroy()
         messagebox.showinfo("启动提示", "截图工具已启动，将开始第一条未完成验证点。\n请按 F8 截图。")
         threading.Thread(target=run, daemon=True).start()
 
     def trigger_screenshot(self):
-        global screenshot_triggered
-        if 'screenshot_triggered' in globals():
-            screenshot_triggered.set()
+        global screenshot_event
+        if screenshot_event:
+            screenshot_event.set()
         else:
             messagebox.showwarning("请先开始执行", "请点击“开始执行”按钮以进入截图流程。")
 
