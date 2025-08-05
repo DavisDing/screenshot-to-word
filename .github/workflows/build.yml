@@ -1,9 +1,9 @@
-name: Build Windows Executable
+name: Build Windows Executable on Push
 
 on:
-  push:
-    tags:
-      - 'v*'
+  push:         # 任意 push 都会触发（可加 branch 条件）
+    branches:
+      - main    # 可改成你使用的主分支名（如 master、dev）
   workflow_dispatch:
 
 jobs:
@@ -29,17 +29,11 @@ jobs:
         run: |
           pyinstaller main.py --name "DesktopTestTool" --noconfirm --onefile
 
-      - name: Upload executable
+      - name: Zip exe
+        run: Compress-Archive -Path dist/DesktopTestTool.exe -DestinationPath DesktopTestTool-win.zip
+
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: DesktopTestTool.exe
-          path: dist/DesktopTestTool.exe
-
-      - name: Create Release (with .exe)
-        uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
-        with:
-          name: Release ${{ github.ref_name }}
-          files: dist/DesktopTestTool.exe
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: DesktopTestTool
+          path: DesktopTestTool-win.zip
