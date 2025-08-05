@@ -32,6 +32,31 @@ EXCEL_PATH = xlsx_files[0]
 df = pd.read_excel(EXCEL_PATH, engine='openpyxl')
 df.fillna('', inplace=True)
 
+def create_floating_screenshot_button():
+    def do_capture():
+        try:
+            if 'screenshot_triggered' in globals():
+                screenshot_triggered.set()
+                return
+            messagebox.showinfo("截图中", "即将截图当前屏幕...")
+            screenshot = pyautogui.screenshot()
+            quick_dir = os.path.join(OUTPUT_DIR, "quick_captures")
+            os.makedirs(quick_dir, exist_ok=True)
+            count = len(glob.glob(os.path.join(quick_dir, "screenshot_*.png"))) + 1
+            temp_path = os.path.join(quick_dir, f"screenshot_{count}.png")
+            screenshot.save(temp_path)
+            messagebox.showinfo("截图成功", f"截图已保存：{temp_path}")
+        except Exception as e:
+            messagebox.showerror("截图失败", str(e))
+
+    float_root = Tk()
+    float_root.title("截图按钮")
+    float_root.geometry("100x50+50+50")
+    float_root.attributes("-topmost", True)
+    float_root.resizable(False, False)
+    Button(float_root, text="截图", command=do_capture).pack(expand=True, fill='both')
+    threading.Thread(target=float_root.mainloop, daemon=True).start()
+
 # 日志窗口
 class LogWindow:
     def __init__(self):
@@ -68,7 +93,10 @@ class LogWindow:
         try:
             messagebox.showinfo("截图中", "即将截图当前屏幕...")
             screenshot = pyautogui.screenshot()
-            temp_path = os.path.join(tempfile.gettempdir(), f"screenshot_{uuid.uuid4().hex}.png")
+            quick_dir = os.path.join(OUTPUT_DIR, "quick_captures")
+            os.makedirs(quick_dir, exist_ok=True)
+            count = len(glob.glob(os.path.join(quick_dir, "screenshot_*.png"))) + 1
+            temp_path = os.path.join(quick_dir, f"screenshot_{count}.png")
             screenshot.save(temp_path)
             messagebox.showinfo("截图成功", f"截图已保存：{temp_path}")
             self.log(f"截图已保存：{temp_path}")
@@ -159,6 +187,9 @@ class Annotator:
 
 # 主流程
 def run():
+    global screenshot_triggered
+    screenshot_triggered = threading.Event()
+    create_floating_screenshot_button()
     logwin = LogWindow()
     logwin.log(f"开始处理 Excel 文件：{EXCEL_PATH}")
     wb = load_workbook(EXCEL_PATH)
@@ -185,14 +216,18 @@ def run():
         if status.lower() in ['passed', EXECUTED_STATUS]:
             continue
 
-        logwin.log(f"[用例 {file_name}] 验证点: {verify_point}")
+        logwin.log(f"[用例名称] {file_name}")
+        logwin.log(f"[验证点] {verify_point}")
         messagebox.showinfo("验证点", verify_point)
 
         while True:
-            logwin.log("等待按 F8 开始截图...")
-            keyboard.wait('F8')
+            screenshot_triggered.clear()
+            keyboard.add_hotkey('F8', lambda: screenshot_triggered.set())
+            logwin.log("等待按 F8 或点击悬浮截图按钮开始截图...")
+            while not screenshot_triggered.is_set():
+                time.sleep(0.1)
             messagebox.showinfo("截图中", "即将截图当前屏幕...")
-            logwin.log("已按下 F8，开始截图...")
+            logwin.log("已触发截图，开始截图...")
             time.sleep(0.5)
 
             try:
@@ -235,6 +270,7 @@ class MainWindow:
         self.root.mainloop()
 
     def start(self):
+        create_floating_screenshot_button()
         self.root.destroy()
         messagebox.showinfo("启动提示", "截图工具已启动，将开始第一条未完成验证点。\n请按 F8 截图。")
         run()
@@ -243,9 +279,16 @@ class MainWindow:
         messagebox.showinfo("截图中", "即将截图当前屏幕...")
         try:
             screenshot = pyautogui.screenshot()
-            temp_path = os.path.join(tempfile.gettempdir(), f"screenshot_{uuid.uuid4().hex}.png")
+            quick_dir = os.path.join(OUTPUT_DIR, "quick_captures")
+            os.makedirs(quick_dir, exist_ok=True)
+            count = len(glob.glob(os.path.join(quick_dir, "screenshot_*.png"))) + 1
+            temp_path = os.path.join(quick_dir, f"screenshot_{count}.png")
             screenshot.save(temp_path)
-            messagebox.showinfo("截图成功", f"截图已保存：{temp_path}")
+
+            # 进行标注并保存到 quick_captures.docx
+            word_path = os.path.join(OUTPUT_DIR, "quick_captures.docx")
+            Annotator(temp_path, temp_path, word_path, f"快速截图 {count}")
+            messagebox.showinfo("截图成功", f"截图已保存并写入：{word_path}")
         except Exception as e:
             messagebox.showerror("截图失败", str(e))
 
