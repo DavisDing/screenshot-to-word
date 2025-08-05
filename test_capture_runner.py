@@ -62,7 +62,7 @@ class LogWindow:
         self.log_lines = []
         # Add screenshot button at the end of __init__
         Button(self.root, text='截图', command=lambda: screenshot_triggered.set()).pack(pady=5)
-        self.root.after(100, self.start_mainloop)
+        threading.Thread(target=self.root.mainloop, daemon=True).start()
 
     def start_mainloop(self):
         try:
@@ -173,6 +173,10 @@ def run():
     wb = load_workbook(EXCEL_PATH)
     ws = wb.active
 
+    if not hasattr(run, "_hotkey_registered"):
+        keyboard.add_hotkey('F8', lambda: screenshot_triggered.set())
+        run._hotkey_registered = True
+
     for idx, row in df.iterrows():
         if idx == 0:
             continue
@@ -200,7 +204,6 @@ def run():
 
         while True:
             screenshot_triggered.clear()
-            keyboard.add_hotkey('F8', lambda: screenshot_triggered.set())
             logwin.log("等待按 F8 或点击悬浮截图按钮开始截图...")
             while not screenshot_triggered.is_set():
                 time.sleep(0.1)
@@ -219,8 +222,11 @@ def run():
             tmp_path = os.path.join(raw_dir, f"temp_{uuid.uuid4().hex}.png")
             screenshot.save(tmp_path)
 
-            Annotator(tmp_path, img_path, word_path, verify_point)
-            os.remove(tmp_path)
+            try:
+                Annotator(tmp_path, img_path, word_path, verify_point)
+            finally:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
 
             ws.cell(row=idx+2, column=3, value=EXECUTED_STATUS)
             try:
@@ -243,7 +249,7 @@ class MainWindow:
         self.root.geometry("300x150+200+200")
         Label(self.root, text="截图自动化工具", font=("Arial", 14)).pack(pady=10)
         Button(self.root, text="开始执行", command=self.start).pack(pady=10)
-        Button(self.root, text="截图").pack(pady=10)
+        Button(self.root, text="截图", command=self.trigger_screenshot).pack(pady=10)
         Button(self.root, text="退出", command=self.root.quit).pack()
         self.root.mainloop()
 
@@ -253,6 +259,13 @@ class MainWindow:
         messagebox.showinfo("启动提示", "截图工具已启动，将开始第一条未完成验证点。\n请按 F8 截图。")
 
         run()
+
+    def trigger_screenshot(self):
+        global screenshot_triggered
+        if 'screenshot_triggered' in globals():
+            screenshot_triggered.set()
+        else:
+            messagebox.showwarning("请先开始执行", "请点击“开始执行”按钮以进入截图流程。")
 
 if __name__ == '__main__':
     MainWindow()
