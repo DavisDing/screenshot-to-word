@@ -1,37 +1,68 @@
 import os
 import time
+import datetime
 import pandas as pd
 import pyautogui
 import keyboard
-from tkinter import Tk, Canvas, PhotoImage, simpledialog, Button, Frame, Label, StringVar, Entry, messagebox
-from PIL import Image, ImageTk
-from docx import Document
-from docx.shared import Inches
-from openpyxl import load_workbook
 import glob
 import re
 import tempfile
 import uuid
+import threading
+from tkinter import Tk, Canvas, simpledialog, Button, Frame, Label, messagebox, Text
+from PIL import Image, ImageTk
+from docx import Document
+from docx.shared import Inches
+from openpyxl import load_workbook
 
-# 定义常量
+# 目录与日志文件
 INPUT_DIR = 'excel_input'
 OUTPUT_DIR = 'output'
 EXECUTED_STATUS = '已执行'
-
-# 自动读取 excel_input 目录下最新的 Excel 文件
-xlsx_files = sorted(glob.glob(os.path.join(INPUT_DIR, '*.xlsx')), key=os.path.getmtime, reverse=True)
-
-if not xlsx_files:
-    raise FileNotFoundError("在 ./excel_input/ 下未找到 Excel 文件，请放置一个案例文件")
-
-EXCEL_PATH = xlsx_files[0]
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+LOG_FILE = os.path.join(OUTPUT_DIR, f"log_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt")
+
+# 自动读取最新Excel文件
+xlsx_files = sorted(glob.glob(os.path.join(INPUT_DIR, '*.xlsx')), key=os.path.getmtime, reverse=True)
+if not xlsx_files:
+    raise FileNotFoundError("在 ./excel_input/ 下未找到 Excel 文件")
+EXCEL_PATH = xlsx_files[0]
 
 # 加载Excel
 df = pd.read_excel(EXCEL_PATH, engine='openpyxl')
 df.fillna('', inplace=True)
 
-# 标注工具类
+# 日志窗口
+class LogWindow:
+    def __init__(self):
+        self.root = Tk()
+        self.root.title("操作日志")
+        self.root.geometry("400x300+100+100")
+        self.text = Text(self.root, wrap='word', bg='black', fg='lime', font=("Consolas", 10))
+        self.text.pack(expand=True, fill='both')
+        self.root.attributes('-topmost', True)
+        self.log_lines = []
+        self.root.after(100, self.start_mainloop)
+
+    def start_mainloop(self):
+        try:
+            self.root.mainloop()
+        except Exception:
+            pass
+
+    def log(self, msg):
+        timestamp = time.strftime("[%H:%M:%S]")
+        line = f"{timestamp} {msg}"
+        self.text.insert('end', line + '\n')
+        self.text.see('end')
+        self.log_lines.append(line)
+        try:
+            with open(LOG_FILE, 'a', encoding='utf-8') as f:
+                f.write(line + '\n')
+        except Exception as e:
+            print(f"日志写入失败: {e}")
+
+# 标注工具
 class Annotator:
     def __init__(self, image_path, save_path, word_path, case_text):
         self.root = Tk()
@@ -59,7 +90,6 @@ class Annotator:
         ctrl.pack()
         Button(ctrl, text='撤销', command=self.undo).pack(side='left')
         Button(ctrl, text='保存截图并退出', command=self.save_and_exit).pack(side='left')
-
         self.root.mainloop()
 
     def on_click(self, event):
@@ -96,33 +126,27 @@ class Annotator:
             self.canvas.postscript(file=temp_eps_path)
             img = Image.open(temp_eps_path)
             img.save(self.save_path)
-        except Exception as e:
-            messagebox.showerror("保存错误", f"保存截图时出错: {str(e)}")
-            return
         finally:
             os.close(temp_eps_fd)
             if os.path.exists(temp_eps_path):
                 os.remove(temp_eps_path)
 
-        try:
-            if os.path.exists(self.word_path):
-                doc = Document(self.word_path)
-            else:
-                doc = Document()
-                doc.add_heading(os.path.splitext(os.path.basename(self.word_path))[0], level=1)
-                doc.add_paragraph(self.case_text)
+        if os.path.exists(self.word_path):
+            doc = Document(self.word_path)
+        else:
+            doc = Document()
+            doc.add_heading(os.path.splitext(os.path.basename(self.word_path))[0], level=1)
+            doc.add_paragraph(self.case_text)
 
-            doc.add_picture(self.save_path, width=Inches(6))
-            doc.add_paragraph('')
-            doc.save(self.word_path)
-        except Exception as e:
-            messagebox.showerror("Word保存错误", f"保存Word文档时出错: {str(e)}")
-            return
-
+        doc.add_picture(self.save_path, width=Inches(6))
+        doc.add_paragraph('')
+        doc.save(self.word_path)
         self.root.destroy()
 
-# 主处理流程
+# 主流程
 def run():
+    logwin = LogWindow()
+    logwin.log(f"开始处理 Excel 文件：{EXCEL_PATH}")
     wb = load_workbook(EXCEL_PATH)
     ws = wb.active
 
@@ -132,40 +156,39 @@ def run():
         file_name = str(row[0]).strip()
         verify_point = str(row[1]).strip()
         status = str(row[2]).strip()
-
-        # 路径安全检查，防止路径遍历攻击
         if re.search(r'[<>:"/\\|?*\x00-\x1F]', file_name):
             messagebox.showerror("文件名错误", f"无效的文件名: {file_name}")
             continue
-
-        # 构造安全路径
         safe_file_name = os.path.normpath(file_name).replace(os.sep, '_')
+
+        # 截图文件夹（以A列命名的子文件夹）
         raw_dir = os.path.join(OUTPUT_DIR, safe_file_name)
         os.makedirs(raw_dir, exist_ok=True)
 
-        if status.lower() in ['passed', '已执行']:
+        # Word文件直接放output根目录
+        word_path = os.path.join(OUTPUT_DIR, f"{safe_file_name}.docx")
+
+        if status.lower() in ['passed', EXECUTED_STATUS]:
             continue
 
-        # 显示验证点内容
-        print(f"\n[用例 {file_name}] 验证点: {verify_point}")
+        logwin.log(f"[用例 {file_name}] 验证点: {verify_point}")
         messagebox.showinfo("验证点", verify_point)
 
         while True:
-            print("请按 F8 截图并标注...")
+            logwin.log("等待按 F8 开始截图...")
             keyboard.wait('F8')
+            messagebox.showinfo("截图中", "即将截图当前屏幕...")
+            logwin.log("已按下 F8，开始截图...")
             time.sleep(0.5)
 
             try:
                 screenshot = pyautogui.screenshot()
             except Exception as e:
-                messagebox.showerror("截图错误", f"截图时出错: {str(e)}")
+                messagebox.showerror("截图错误", f"截图失败: {str(e)}")
                 continue
 
-            # 更高效的计数方式
             count = len(glob.glob(os.path.join(raw_dir, "screenshot_*.png"))) + 1
             img_path = os.path.join(raw_dir, f"screenshot_{count}.png")
-
-            word_path = os.path.join(raw_dir, f"{safe_file_name}.docx")
             tmp_path = os.path.join(raw_dir, f"temp_{uuid.uuid4().hex}.png")
             screenshot.save(tmp_path)
 
@@ -176,14 +199,41 @@ def run():
             try:
                 wb.save(EXCEL_PATH)
             except Exception as e:
-                messagebox.showerror("保存Excel错误", f"保存Excel时出错: {str(e)}")
+                messagebox.showerror("保存错误", f"Excel保存失败: {str(e)}")
                 continue
 
-            choice = messagebox.askyesno("继续截图？", "是否继续截图？\n是 = 继续当前用例截图\n否 = 进入下一条验证点")
+            choice = messagebox.askyesno("继续截图？", "是否继续截图？\n是 = 当前用例继续截图\n否 = 进入下一条")
             if not choice:
                 break
 
     messagebox.showinfo("执行完成", "所有用例执行完毕！")
 
+# 主界面
+class MainWindow:
+    def __init__(self):
+        self.root = Tk()
+        self.root.title("截图自动化工具")
+        self.root.geometry("300x150+200+200")
+        Label(self.root, text="截图自动化工具", font=("Arial", 14)).pack(pady=10)
+        Button(self.root, text="开始执行", command=self.start).pack(pady=10)
+        Button(self.root, text="截图", command=self.capture).pack(pady=10)
+        Button(self.root, text="退出", command=self.root.quit).pack()
+        self.root.mainloop()
+
+    def start(self):
+        self.root.destroy()
+        messagebox.showinfo("启动提示", "截图工具已启动，将开始第一条未完成验证点。\n请按 F8 截图。")
+        run()
+
+    def capture(self):
+        messagebox.showinfo("截图中", "即将截图当前屏幕...")
+        try:
+            screenshot = pyautogui.screenshot()
+            temp_path = os.path.join(tempfile.gettempdir(), f"screenshot_{uuid.uuid4().hex}.png")
+            screenshot.save(temp_path)
+            messagebox.showinfo("截图成功", f"截图已保存：{temp_path}")
+        except Exception as e:
+            messagebox.showerror("截图失败", str(e))
+
 if __name__ == '__main__':
-    run()
+    MainWindow()
