@@ -1,0 +1,6 @@
+pillow
+pyautogui
+pandas
+openpyxl
+python-docx
+keyboard
