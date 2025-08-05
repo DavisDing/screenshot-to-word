@@ -315,7 +315,7 @@ class MainWindow:
 
     def start(self):
         global screenshot_event
-        self.root.destroy()
+        self.root.withdraw()
         messagebox.showinfo("启动提示", "截图工具已启动，将开始第一条未完成验证点。\n请按 F8 截图。")
         threading.Thread(target=lambda: run(self.progress_label), daemon=True).start()
 
