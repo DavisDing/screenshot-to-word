@@ -16,6 +16,8 @@ from docx.shared import Inches
 from openpyxl import load_workbook
 import logging
 
+logwin = None
+
 screenshot_event = threading.Event()
 
 # 目录与日志文件
@@ -198,8 +200,9 @@ class Annotator:
 # 主流程
 def run(progress_label):
     global screenshot_event
+    global logwin
+    logwin = ControlPanelWindow()
     try:
-        logwin = ControlPanelWindow()
         logwin.log(f"开始处理 Excel 文件：{EXCEL_PATH}")
         
         try:
