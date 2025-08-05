@@ -3,7 +3,7 @@ name: Build Windows Executable on Push
 on:
   push:         # 任意 push 都会触发（可加 branch 条件）
     branches:
-      - main    # 可改成你使用的主分支名（如 master、dev）
+      - '*'    # 可改成你使用的主分支名（如 master、dev）
   workflow_dispatch:
 
 jobs:
