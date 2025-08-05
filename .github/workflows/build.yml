@@ -25,7 +25,7 @@ jobs:
 
     - name: Build EXE with PyInstaller
       run: |
-        pyinstaller --onefile --noconsole test_capture_runner_Qwen.py
+        pyinstaller --onefile --noconsole test_capture_runner.py
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
