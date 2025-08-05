@@ -42,6 +42,8 @@ class LogWindow:
         self.text.pack(expand=True, fill='both')
         self.root.attributes('-topmost', True)
         self.log_lines = []
+        # Add screenshot button at the end of __init__
+        Button(self.root, text='截图', command=self.capture).pack(pady=5)
         self.root.after(100, self.start_mainloop)
 
     def start_mainloop(self):
@@ -61,6 +63,18 @@ class LogWindow:
                 f.write(line + '\n')
         except Exception as e:
             print(f"日志写入失败: {e}")
+
+    def capture(self):
+        try:
+            messagebox.showinfo("截图中", "即将截图当前屏幕...")
+            screenshot = pyautogui.screenshot()
+            temp_path = os.path.join(tempfile.gettempdir(), f"screenshot_{uuid.uuid4().hex}.png")
+            screenshot.save(temp_path)
+            messagebox.showinfo("截图成功", f"截图已保存：{temp_path}")
+            self.log(f"截图已保存：{temp_path}")
+        except Exception as e:
+            messagebox.showerror("截图失败", str(e))
+            self.log(f"截图失败: {e}")
 
 # 标注工具
 class Annotator:
