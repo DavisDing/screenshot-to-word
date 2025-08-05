@@ -38,14 +38,7 @@ def create_floating_screenshot_button():
             if 'screenshot_triggered' in globals():
                 screenshot_triggered.set()
                 return
-            messagebox.showinfo("截图中", "即将截图当前屏幕...")
-            screenshot = pyautogui.screenshot()
-            quick_dir = os.path.join(OUTPUT_DIR, "quick_captures")
-            os.makedirs(quick_dir, exist_ok=True)
-            count = len(glob.glob(os.path.join(quick_dir, "screenshot_*.png"))) + 1
-            temp_path = os.path.join(quick_dir, f"screenshot_{count}.png")
-            screenshot.save(temp_path)
-            messagebox.showinfo("截图成功", f"截图已保存：{temp_path}")
+            messagebox.showwarning("请先开始执行", "请点击主界面“开始执行”以进入用例截图流程。")
         except Exception as e:
             messagebox.showerror("截图失败", str(e))
 
@@ -68,7 +61,7 @@ class LogWindow:
         self.root.attributes('-topmost', True)
         self.log_lines = []
         # Add screenshot button at the end of __init__
-        Button(self.root, text='截图', command=self.capture).pack(pady=5)
+        Button(self.root, text='截图', command=lambda: screenshot_triggered.set()).pack(pady=5)
         self.root.after(100, self.start_mainloop)
 
     def start_mainloop(self):
@@ -88,21 +81,6 @@ class LogWindow:
                 f.write(line + '\n')
         except Exception as e:
             print(f"日志写入失败: {e}")
-
-    def capture(self):
-        try:
-            messagebox.showinfo("截图中", "即将截图当前屏幕...")
-            screenshot = pyautogui.screenshot()
-            quick_dir = os.path.join(OUTPUT_DIR, "quick_captures")
-            os.makedirs(quick_dir, exist_ok=True)
-            count = len(glob.glob(os.path.join(quick_dir, "screenshot_*.png"))) + 1
-            temp_path = os.path.join(quick_dir, f"screenshot_{count}.png")
-            screenshot.save(temp_path)
-            messagebox.showinfo("截图成功", f"截图已保存：{temp_path}")
-            self.log(f"截图已保存：{temp_path}")
-        except Exception as e:
-            messagebox.showerror("截图失败", str(e))
-            self.log(f"截图失败: {e}")
 
 # 标注工具
 class Annotator:
@@ -265,7 +243,7 @@ class MainWindow:
         self.root.geometry("300x150+200+200")
         Label(self.root, text="截图自动化工具", font=("Arial", 14)).pack(pady=10)
         Button(self.root, text="开始执行", command=self.start).pack(pady=10)
-        Button(self.root, text="截图", command=self.capture).pack(pady=10)
+        Button(self.root, text="截图").pack(pady=10)
         Button(self.root, text="退出", command=self.root.quit).pack()
         self.root.mainloop()
 
@@ -273,24 +251,8 @@ class MainWindow:
         create_floating_screenshot_button()
         self.root.destroy()
         messagebox.showinfo("启动提示", "截图工具已启动，将开始第一条未完成验证点。\n请按 F8 截图。")
+
         run()
-
-    def capture(self):
-        messagebox.showinfo("截图中", "即将截图当前屏幕...")
-        try:
-            screenshot = pyautogui.screenshot()
-            quick_dir = os.path.join(OUTPUT_DIR, "quick_captures")
-            os.makedirs(quick_dir, exist_ok=True)
-            count = len(glob.glob(os.path.join(quick_dir, "screenshot_*.png"))) + 1
-            temp_path = os.path.join(quick_dir, f"screenshot_{count}.png")
-            screenshot.save(temp_path)
-
-            # 进行标注并保存到 quick_captures.docx
-            word_path = os.path.join(OUTPUT_DIR, "quick_captures.docx")
-            Annotator(temp_path, temp_path, word_path, f"快速截图 {count}")
-            messagebox.showinfo("截图成功", f"截图已保存并写入：{word_path}")
-        except Exception as e:
-            messagebox.showerror("截图失败", str(e))
 
 if __name__ == '__main__':
     MainWindow()
