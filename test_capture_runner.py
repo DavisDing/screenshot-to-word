@@ -43,61 +43,21 @@ EXCEL_PATH = xlsx_files[0]
 df = pd.read_excel(EXCEL_PATH, engine='openpyxl')
 df.fillna('', inplace=True)
 
-def create_floating_screenshot_button():
-    def do_capture():
-        try:
-            if screenshot_event:
-                screenshot_event.set()
-                return
-            messagebox.showwarning("请先开始执行", "请点击主界面“开始执行”以进入用例截图流程。")
-        except Exception as e:
-            messagebox.showerror("截图失败", str(e))
-
-    float_root = Tk()
-    float_root.title("截图按钮")
-    float_root.geometry("100x50+50+50")
-    float_root.attributes("-topmost", True)
-    float_root.resizable(False, False)
-    Button(float_root, text="截图", command=do_capture).pack(expand=True, fill='both')
-    
-    # 使用 daemon=True 确保线程不会阻止程序退出
-    threading.Thread(target=float_root.mainloop, daemon=True).start()
-
-# 日志窗口
-class LogWindow:
-    _instance = None
-    _lock = threading.Lock()
-
-    def __new__(cls):
-        with cls._lock:
-            if cls._instance is None:
-                cls._instance = super(LogWindow, cls).__new__(cls)
-            return cls._instance
-
+class ControlPanelWindow:
     def __init__(self):
-        if hasattr(self, 'initialized'):
-            return
-        self.initialized = True
         self.root = Tk()
-        self.root.title("操作日志")
-        self.root.geometry("400x300+100+100")
-        self.text = Text(self.root, wrap='word', bg='black', fg='lime', font=("Consolas", 10))
-        self.text.pack(expand=True, fill='both')
+        self.root.title("控制面板")
+        self.root.geometry("500x400+100+100")
         self.root.attributes('-topmost', True)
-        self.log_lines = []
-        # Add screenshot button at the end of __init__
-        Button(self.root, text='截图', command=self._trigger_screenshot).pack(pady=5)
-        # 在单独的线程中运行 GUI
-        self.thread = threading.Thread(target=self._run_gui, daemon=True)
-        self.thread.start()
 
-    def _run_gui(self):
-        try:
-            self.root.mainloop()
-        except Exception as e:
-            logging.error(f"日志窗口错误: {e}")
+        self.text = Text(self.root, wrap='word', bg='black', fg='lime', font=("Consolas", 10))
+        self.text.pack(expand=True, fill='both', padx=10, pady=(10, 5))
 
-    def _trigger_screenshot(self):
+        Button(self.root, text='截图', command=self.trigger_screenshot).pack(pady=5)
+
+        threading.Thread(target=self.root.mainloop, daemon=True).start()
+
+    def trigger_screenshot(self):
         global screenshot_event
         if screenshot_event:
             screenshot_event.set()
@@ -110,8 +70,7 @@ class LogWindow:
         try:
             self.text.insert('end', line + '\n')
             self.text.see('end')
-            self.log_lines.append(line)
-            logging.info(msg)  # 同时写入文件日志
+            logging.info(msg)
         except Exception as e:
             print(f"日志显示失败: {e}")
 
@@ -204,10 +163,10 @@ class Annotator:
             self.root.destroy()
 
 # 主流程
-def run():
+def run(progress_label):
     global screenshot_event
     try:
-        logwin = LogWindow()
+        logwin = ControlPanelWindow()
         logwin.log(f"开始处理 Excel 文件：{EXCEL_PATH}")
         
         try:
@@ -221,9 +180,12 @@ def run():
             keyboard.add_hotkey('F8', lambda: screenshot_event.set())
             run._hotkey_registered = True
 
+        total = len(df) - 1
+
         for idx, row in df.iterrows():
             if idx == 0:
                 continue
+            progress_label.config(text=f"当前进度：{idx}/{total}")
             file_name = str(row[0]).strip()
             verify_point = str(row[1]).strip()
             status = str(row[2]).strip()
@@ -308,19 +270,20 @@ class MainWindow:
     def __init__(self):
         self.root = Tk()
         self.root.title("截图自动化工具")
-        self.root.geometry("300x150+200+200")
+        self.root.geometry("300x180+200+200")
         Label(self.root, text="截图自动化工具", font=("Arial", 14)).pack(pady=10)
         Button(self.root, text="开始执行", command=self.start).pack(pady=10)
         Button(self.root, text="截图", command=self.trigger_screenshot).pack(pady=10)
         Button(self.root, text="退出", command=self.root.quit).pack()
+        self.progress_label = Label(self.root, text="当前进度：尚未开始", font=("Arial", 10))
+        self.progress_label.pack()
         self.root.mainloop()
 
     def start(self):
         global screenshot_event
-        create_floating_screenshot_button()
         self.root.destroy()
         messagebox.showinfo("启动提示", "截图工具已启动，将开始第一条未完成验证点。\n请按 F8 截图。")
-        threading.Thread(target=run, daemon=True).start()
+        threading.Thread(target=lambda: run(self.progress_label), daemon=True).start()
 
     def trigger_screenshot(self):
         global screenshot_event
