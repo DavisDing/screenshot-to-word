@@ -1,6 +1,6 @@
+import os
 import tkinter as tk
 from PIL import Image, ImageTk, ImageDraw
-
 class Annotator(tk.Toplevel):
     def __init__(self, image_path, on_save):
         super().__init__()
