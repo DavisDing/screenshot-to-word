@@ -5,126 +5,107 @@ from PIL import Image, ImageTk, ImageDraw
 import os
 
 def launch_annotator(image_path):
-    if not os.path.exists(image_path):
-        print("[标注器] 图片不存在：", image_path)
-        return None
+    Annotator(image_path).run()
+    return image_path.replace(".png", "_marked.png")
 
-    try:
-        img = Image.open(image_path)
-        img.load()
-    except Exception as e:
-        print("[标注器] 图像加载失败：", e)
-        return None
+class Annotator:
+    def __init__(self, image_path):
+        self.image_path = image_path
 
-    saved = False
-    annotated_path = image_path.replace(".png", "_marked.png")
-    undo_stack = []
-    annotations = []
+        # 读取图片
+        self.original = Image.open(image_path)
+        self.image = self.original.copy()
+        self.draw = ImageDraw.Draw(self.image)
 
-    root = tk.Tk()
-    root.title("截图标注 - Esc退出，Ctrl+S保存")
-    root.geometry(f"{img.width+20}x{img.height+20}+100+100")
-    root.resizable(True, True)
+        # 初始化窗口，使用自适应图片尺寸（非全屏）
+        self.root = tk.Toplevel()
+        self.root.title("截图标注")
+        self.root.attributes("-topmost", True)
+        window_width = self.image.width + 20
+        window_height = self.image.height + 60
+        self.root.geometry(f"{window_width}x{window_height}+100+100")
+        self.root.configure(bg='gray')
+        self.root.resizable(False, False)
 
-    draw = ImageDraw.Draw(img)
-    tk_img = ImageTk.PhotoImage(img)
+        # 顶部工具栏：嵌入保存按钮
+        toolbar = tk.Frame(self.root, bg='gray')
+        toolbar.pack(side="top", fill="x", pady=5)
 
-    canvas = tk.Canvas(root, width=img.width, height=img.height, bg="gray")
-    canvas.pack(padx=10, pady=10)
+        save_btn = tk.Button(
+            toolbar,
+            text="✅ 保存标注并退出",
+            command=self.save_and_close,
+            bg="#4CAF50", fg="white",
+            font=("Arial", 11, "bold")
+        )
+        save_btn.pack(side="right", padx=15)
 
-    canvas.create_image(0, 0, anchor="nw", image=tk_img)
-    canvas.image = tk_img  # 防止 pyimage2 错误
+        # 图像显示区域
+        self.canvas = tk.Canvas(self.root, width=self.image.width, height=self.image.height)
+        self.tk_image = ImageTk.PhotoImage(self.image)
+        self.canvas.create_image(0, 0, anchor="nw", image=self.tk_image, tags="image")
+        self.canvas.pack(padx=10, pady=5)
 
-    def save_and_exit(event=None):
-        nonlocal saved
-        saved = True
-        for item in annotations:
-            if item[0] == "oval":
-                draw.ellipse(item[1], outline="red", width=2)
-            elif item[0] == "text":
-                x, y, text = item[1]
-                draw.text((x, y), text, fill="blue")
-        img.save(annotated_path)
-        root.destroy()
-        if hasattr(root, "float_btn"):
-            root.float_btn.destroy()
+        # 标注操作绑定
+        self.start_x = None
+        self.start_y = None
+        self.rect = None
 
-    def undo(event=None):
-        if undo_stack:
-            last = undo_stack.pop()
-            canvas.delete(last)
-            if annotations:
-                annotations.pop()
+        self.canvas.bind("<ButtonPress-1>", self.on_left_down)
+        self.canvas.bind("<B1-Motion>", self.on_left_drag)
+        self.canvas.bind("<ButtonRelease-1>", self.on_left_up)
+        self.canvas.bind("<Button-3>", self.on_right_click)
+        self.root.bind("<Escape>", self.save_and_close)
 
-    def on_escape(event=None):
-        if not saved:
-            if messagebox.askyesno("退出", "尚未保存标注，是否保存？"):
-                save_and_exit()
-            else:
-                root.destroy()
-                if hasattr(root, "float_btn"):
-                    root.float_btn.destroy()
-        else:
-            root.destroy()
-            if hasattr(root, "float_btn"):
-                root.float_btn.destroy()
+    def on_left_down(self, event):
+        self.start_x = event.x
+        self.start_y = event.y
 
-    def on_left_press(event):
-        canvas.start_x = event.x
-        canvas.start_y = event.y
+    def on_left_drag(self, event):
+        if self.rect:
+            self.canvas.delete(self.rect)
+        self.rect = self.canvas.create_oval(
+            self.start_x, self.start_y, event.x, event.y,
+            outline='red', width=2
+        )
 
-    def on_left_release(event):
-        x0, y0 = canvas.start_x, canvas.start_y
-        x1, y1 = event.x, event.y
-        oval = canvas.create_oval(x0, y0, x1, y1, outline="red", width=2)
-        annotations.append(("oval", (x0, y0, x1, y1)))
-        undo_stack.append(oval)
+    def on_left_up(self, event):
+        self.draw.ellipse([self.start_x, self.start_y, event.x, event.y], outline='red', width=2)
+        self.update_canvas()
+        self.rect = None
 
-    def on_right_click(event):
-        text = simpledialog.askstring("添加文字", "请输入标注文字：")
+    def on_right_click(self, event):
+        text = self.get_text_input()
         if text:
-            txt = canvas.create_text(event.x, event.y, text=text, fill="blue", font=("Arial", 14, "bold"), anchor="nw")
-            annotations.append(("text", (event.x, event.y, text)))
-            undo_stack.append(txt)
+            self.draw.text((event.x, event.y), text, fill='blue')
+            self.update_canvas()
 
-    # ⚠️ 全局绑定快捷键 + 强制焦点
-    root.focus_force()
-    root.bind_all("<Control-s>", save_and_exit)
-    root.bind_all("<Control-z>", undo)
-    root.bind_all("<Escape>", on_escape)
-    root.bind("<ButtonPress-1>", on_left_press)
-    root.bind("<ButtonRelease-1>", on_left_release)
-    root.bind("<Button-3>", on_right_click)
+    def get_text_input(self):
+        win = tk.Toplevel(self.root)
+        win.title("输入文字")
+        entry = tk.Entry(win)
+        entry.pack(padx=10, pady=10)
 
-    # ✅ 悬浮保存按钮（延迟显示）
-    def create_float_button():
-        float_btn = tk.Toplevel()
-        float_btn.overrideredirect(True)
-        float_btn.attributes('-topmost', True)
-        float_btn.geometry("+30+30")
+        result = {'text': None}
+        def confirm():
+            result['text'] = entry.get()
+            win.destroy()
 
-        save_btn = tk.Button(float_btn, text="保存标注 (Ctrl+S)", command=save_and_exit)
-        save_btn.pack()
+        tk.Button(win, text="确定", command=confirm).pack()
+        win.wait_window()
+        return result['text']
 
-        # 可拖动按钮
-        def start_move(event):
-            float_btn.x = event.x
-            float_btn.y = event.y
-        def stop_move(event):
-            float_btn.x = None
-            float_btn.y = None
-        def on_motion(event):
-            x = float_btn.winfo_x() - float_btn.x + event.x
-            y = float_btn.winfo_y() - float_btn.y + event.y
-            float_btn.geometry(f"+{x}+{y}")
-        save_btn.bind("<ButtonPress-1>", start_move)
-        save_btn.bind("<ButtonRelease-1>", stop_move)
-        save_btn.bind("<B1-Motion>", on_motion)
+    def update_canvas(self):
+        self.tk_image = ImageTk.PhotoImage(self.image)
+        self.canvas.delete("image")
+        self.canvas.create_image(0, 0, anchor="nw", image=self.tk_image, tags="image")
 
-        root.float_btn = float_btn
-        print("[调试] 悬浮保存按钮已创建")
+    def save_and_close(self, event=None):
+        if messagebox.askyesno("退出确认", "是否保存标注并退出？"):
+            save_path = self.image_path.replace(".png", "_marked.png")
+            self.image.save(save_path)
+            print(f"✅ 标注已保存：{save_path}")
+        self.root.destroy()
 
-    root.after(300, create_float_button)
-    root.mainloop()
-
-    return annotated_path if saved else None
+    def run(self):
+        self.root.mainloop()
