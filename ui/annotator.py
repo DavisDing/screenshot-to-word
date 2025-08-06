@@ -6,23 +6,36 @@ import os
 
 def launch_annotator(image_path):
     if not os.path.exists(image_path):
+        print("[标注器] 图片路径不存在：", image_path)
         return None
 
     saved = False
     annotated_path = image_path.replace(".png", "_marked.png")
     undo_stack = []
 
-    root = tk.Tk()
-    root.attributes('-fullscreen', True)
-    root.title("截图标注 - Esc退出，Ctrl+S保存")
+    try:
+        img = Image.open(image_path)
+        img.load()
+    except Exception as e:
+        print("[标注器] 图片加载失败：", e)
+        return None
 
-    img = Image.open(image_path)
+    print(f"[标注器] 加载图片成功：{image_path}，尺寸：{img.width}x{img.height}")
+
+    root = tk.Tk()
+    root.title("截图标注 - Esc退出，Ctrl+S保存")
+    canvas_width = img.width + 20
+    canvas_height = img.height + 20
+    root.geometry(f"{canvas_width}x{canvas_height}+100+100")
+    root.resizable(True, True)
+
     draw = ImageDraw.Draw(img)
     tk_img = ImageTk.PhotoImage(img)
 
-    canvas = tk.Canvas(root, width=img.width, height=img.height)
-    canvas.pack()
-    canvas_img = canvas.create_image(0, 0, anchor="nw", image=tk_img)
+    canvas = tk.Canvas(root, width=img.width, height=img.height, bg="gray")
+    canvas.pack(padx=10, pady=10)
+    canvas.create_image(0, 0, anchor="nw", image=tk_img)
+    canvas.image = tk_img  # 防止GC导致图像不显示
 
     lines = []
 
@@ -82,16 +95,16 @@ def launch_annotator(image_path):
     root.bind("<Control-z>", undo)
     root.bind("<Escape>", on_escape)
 
-    # 创建悬浮保存按钮（始终置顶）
+    # 创建悬浮保存按钮
     float_btn = tk.Toplevel()
-    float_btn.overrideredirect(True)  # 去窗口边框
+    float_btn.overrideredirect(True)
     float_btn.attributes('-topmost', True)
-    float_btn.geometry("+20+20")  # 置顶角落，用户可拖动调整
+    float_btn.geometry("+30+30")
 
     save_btn = tk.Button(float_btn, text="保存标注 (Ctrl+S)", command=save_and_exit)
     save_btn.pack()
 
-    # 支持拖动悬浮按钮
+    # 支持按钮拖动
     def start_move(event):
         float_btn.x = event.x
         float_btn.y = event.y
