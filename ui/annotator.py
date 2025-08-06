@@ -1,84 +1,96 @@
+# ui/annotator.py
 import tkinter as tk
+from tkinter import simpledialog, messagebox
 from PIL import Image, ImageTk, ImageDraw
 import os
 
-def launch_annotator(image_path):
-    Annotator(image_path).run()
-    return image_path.replace(".png", "_marked.png")
+class Annotator(tk.Toplevel):
+    def __init__(self, master, image_path, save_callback):
+        super().__init__(master)
+        self.title("截图标注")
+        self.attributes("-topmost", True)
 
-class Annotator:
-    def __init__(self, image_path):
         self.image_path = image_path
-        self.root = tk.Toplevel()
-        self.root.attributes('-fullscreen', True)
-        self.root.title("截图标注器 - ESC退出")
+        self.save_callback = save_callback
+        self.orig_image = Image.open(image_path)
+        self.draw_image = self.orig_image.copy()
+        self.tk_image = ImageTk.PhotoImage(self.draw_image)
 
-        self.original = Image.open(image_path)
-        self.image = self.original.copy()
-        self.tk_image = ImageTk.PhotoImage(self.image)
-        self.canvas = tk.Canvas(self.root, width=self.image.width, height=self.image.height)
+        self.canvas = tk.Canvas(self, width=self.tk_image.width(), height=self.tk_image.height(), cursor="cross")
         self.canvas.pack()
 
-        self.draw = ImageDraw.Draw(self.image)
+        self.canvas_image = self.canvas.create_image(0, 0, anchor="nw", image=self.tk_image)
+
+        self.shapes = []  # 存储画圈和文字的指令
+        self.current_circle = None
         self.start_x = None
         self.start_y = None
-        self.rect = None
 
-        self.canvas.create_image(0, 0, anchor='nw', image=self.tk_image)
-        self.canvas.bind('<ButtonPress-1>', self.on_left_down)
-        self.canvas.bind('<B1-Motion>', self.on_left_drag)
-        self.canvas.bind('<ButtonRelease-1>', self.on_left_up)
-        self.canvas.bind('<Button-3>', self.on_right_click)
-        self.root.bind('<Escape>', self.on_escape)
-        btn = tk.Button(self.root, text="✅ 保存退出", command=self.save_and_close)
-        btn.place(x=self.image.width - 130, y=20)
-        btn.lift()  # 悬浮于图像之上
+        self.canvas.bind("<ButtonPress-1>", self.on_left_button_down)
+        self.canvas.bind("<B1-Motion>", self.on_left_button_move)
+        self.canvas.bind("<ButtonRelease-1>", self.on_left_button_up)
 
-    def on_left_down(self, event):
+        self.canvas.bind("<Button-3>", self.on_right_button)
+
+        self.bind("<Escape>", self.on_escape)
+        self.bind("<Control-z>", self.on_undo)
+        self.bind("<Control-s>", self.on_save)
+
+    def on_left_button_down(self, event):
         self.start_x = event.x
         self.start_y = event.y
+        self.current_circle = self.canvas.create_oval(self.start_x, self.start_y, event.x, event.y, outline="red", width=2)
 
-    def on_left_drag(self, event):
-        if self.rect:
-            self.canvas.delete(self.rect)
-        self.rect = self.canvas.create_oval(self.start_x, self.start_y, event.x, event.y, outline='red', width=2)
+    def on_left_button_move(self, event):
+        if self.current_circle:
+            self.canvas.coords(self.current_circle, self.start_x, self.start_y, event.x, event.y)
 
-    def on_left_up(self, event):
-        self.draw.ellipse([self.start_x, self.start_y, event.x, event.y], outline='red', width=2)
-        self.update_image()
+    def on_left_button_up(self, event):
+        if self.current_circle:
+            coords = self.canvas.coords(self.current_circle)
+            self.shapes.append(('oval', coords))
+            self.current_circle = None
 
-    def on_right_click(self, event):
-        text = self.get_text_input()
+    def on_right_button(self, event):
+        text = simpledialog.askstring("文本标注", "请输入文本：", parent=self)
         if text:
-            self.draw.text((event.x, event.y), text, fill='blue')
-            self.update_image()
-
-    def get_text_input(self):
-        input_win = tk.Toplevel(self.root)
-        input_win.title("输入文字")
-        input_box = tk.Entry(input_win)
-        input_box.pack(padx=10, pady=10)
-        result = {'text': None}
-
-        def confirm():
-            result['text'] = input_box.get()
-            input_win.destroy()
-
-        tk.Button(input_win, text="确定", command=confirm).pack()
-        input_win.wait_window()
-        return result['text']
+            text_id = self.canvas.create_text(event.x, event.y, text=text, fill="blue", font=("Arial", 14, "bold"))
+            self.shapes.append(('text', (event.x, event.y, text)))
 
     def on_escape(self, event):
-        self.save_and_close()
+        if messagebox.askyesno("退出确认", "是否放弃当前标注并退出？"):
+            self.destroy()
 
-    def update_image(self):
-        self.tk_image = ImageTk.PhotoImage(self.image)
-        self.canvas.create_image(0, 0, anchor='nw', image=self.tk_image)
+    def on_undo(self, event):
+        if not self.shapes:
+            return
+        last = self.shapes.pop()
+        if last[0] == 'oval':
+            # 找到最近的oval并删除
+            items = self.canvas.find_all()
+            for item in reversed(items):
+                if self.canvas.type(item) == 'oval':
+                    self.canvas.delete(item)
+                    break
+        elif last[0] == 'text':
+            # 删除最后一个文本对象
+            items = self.canvas.find_all()
+            for item in reversed(items):
+                if self.canvas.type(item) == 'text':
+                    self.canvas.delete(item)
+                    break
 
-    def save_and_close(self):
-        save_path = self.image_path.replace(".png", "_marked.png")
-        self.image.save(save_path)
-        self.root.destroy()
-
-    def run(self):
-        self.root.mainloop()
+    def on_save(self, event=None):
+        # 将标注绘制到图片上
+        draw = ImageDraw.Draw(self.draw_image)
+        for shape in self.shapes:
+            if shape[0] == 'oval':
+                draw.ellipse(shape[1], outline="red", width=3)
+            elif shape[0] == 'text':
+                x, y, text = shape[1]
+                draw.text((x, y), text, fill="blue")
+        save_path = self.image_path  # 也可以改成新路径
+        self.draw_image.save(save_path)
+        if self.save_callback:
+            self.save_callback(save_path)
+        self.destroy()

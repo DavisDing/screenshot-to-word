@@ -1,28 +1,27 @@
+# utils/logger.py
 import os
-import datetime
 import tkinter as tk
+import datetime
 
 class Logger:
     def __init__(self):
+        self.log_file_path = os.path.join("logs", "output.log")
         self.text_widget = None
-        log_dir = "logs"
-        os.makedirs(log_dir, exist_ok=True)
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.log_path = os.path.join(log_dir, f"log_{timestamp}.txt")
 
-    def attach_text_widget(self, widget: tk.Text):
-        self.text_widget = widget
+    def bind_text_widget(self, text_widget):
+        self.text_widget = text_widget
 
-    def log(self, message, level="info"):
-        prefix = {"info": "[INFO]", "error": "[ERROR]"}.get(level, "[INFO]")
-        text = f"{prefix} {message}\n"
-
-        if self.text_widget:
-            self.text_widget.insert(tk.END, text)
-            self.text_widget.see(tk.END)
+    def log(self, message):
+        timestamp = datetime.datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
+        full_message = f"{timestamp} {message}\n"
 
         try:
-            with open(self.log_path, 'a', encoding='utf-8') as f:
-                f.write(text)
-        except Exception:
-            pass
+            with open(self.log_file_path, "a", encoding="utf-8") as f:
+                f.write(full_message)
+        except PermissionError:
+            pass  # 忽略日志写入失败
+
+        print(full_message, end="")
+        if self.text_widget:
+            self.text_widget.insert(tk.END, full_message)
+            self.text_widget.see(tk.END)

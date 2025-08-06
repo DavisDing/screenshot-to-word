@@ -1,42 +1,50 @@
 # main.py
 import os
-import threading
 import tkinter as tk
 from tkinter import messagebox
+from core.test_runner import TestRunner
 from utils.logger import Logger
 from utils.excel_handler import ExcelHandler
-from core.test_runner import TestRunner
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+class DesktopTestTool:
+    def __init__(self):
+        self.base_dir = os.path.dirname(os.path.abspath(__file__))
+        os.chdir(self.base_dir)
+        self.ensure_directories()
 
-# 创建必要目录
-for folder in ['logs', 'excel_input', 'word_output']:
-    path = os.path.join(BASE_DIR, folder)
-    os.makedirs(path, exist_ok=True)
+        self.logger = Logger()
+        self.excel_handler = ExcelHandler(self.logger)
+        self.test_runner = None
 
-logger = Logger()
-excel_handler = ExcelHandler(logger)
+        self.root = tk.Tk()
+        self.root.title("桌面自动化测试工具")
+        self.root.geometry("300x150")
+        self.create_widgets()
+        self.root.protocol("WM_DELETE_WINDOW", self.on_exit)
 
-def start_execution():
-    runner = TestRunner(logger, excel_handler)
-    threading.Thread(target=runner.run, daemon=True).start()
+    def ensure_directories(self):
+        for folder in ['excel_input', 'word_output', 'logs']:
+            os.makedirs(folder, exist_ok=True)
 
-def exit_program():
-    root.quit()
+    def create_widgets(self):
+        tk.Button(self.root, text="开始执行", width=20, height=2, command=self.start_execution).pack(pady=15)
+        tk.Button(self.root, text="退出", width=20, height=1, command=self.on_exit).pack()
 
-# 主窗口
-root = tk.Tk()
-root.title("桌面自动化测试工具")
-root.geometry("400x200")
+    def start_execution(self):
+        try:
+            self.test_runner = TestRunner(self.logger, self.excel_handler, self.root)
+            self.test_runner.run()
+        except Exception as e:
+            self.logger.log(f"启动失败: {str(e)}")
+            messagebox.showerror("错误", f"启动执行失败：{e}")
 
-start_btn = tk.Button(root, text="开始执行", command=start_execution, font=("Arial", 14))
-start_btn.pack(pady=20)
+    def on_exit(self):
+        if messagebox.askyesno("退出确认", "是否确认退出？"):
+            self.root.destroy()
 
-exit_btn = tk.Button(root, text="退出", command=exit_program, font=("Arial", 14))
-exit_btn.pack(pady=20)
+    def run(self):
+        self.root.mainloop()
 
-log_box = tk.Text(root, height=6)
-log_box.pack(fill="both", expand=True)
-logger.attach_text_widget(log_box)
-
-root.mainloop()
+if __name__ == '__main__':
+    app = DesktopTestTool()
+    app.run()
