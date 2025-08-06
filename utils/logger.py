@@ -1,4 +1,3 @@
-# utils/logger.py
 import tkinter as tk
 from tkinter.scrolledtext import ScrolledText
 import threading
@@ -18,7 +17,6 @@ class Logger:
         self.text_widget = None
 
     def init_ui(self, parent):
-        # 在主窗口或Frame中创建滚动文本框显示日志
         self.text_widget = ScrolledText(parent, state='disabled', height=15, width=80, bg="#1e1e1e", fg="#d4d4d4", font=("Consolas", 10))
         self.text_widget.pack(fill='both', expand=True)
         self.root = parent
@@ -45,10 +43,8 @@ class Logger:
         full_msg = f"[{timestamp}] {msg}"
         with self.lock:
             self.log_queue.append(full_msg)
-        # 写入文件
         try:
             with open(self.log_file_path, "a", encoding="utf-8") as f:
                 f.write(full_msg + "\n")
         except Exception:
-            # 文件写入异常时忽略，但不影响界面日志
             pass

@@ -1,4 +1,3 @@
-# utils/excel_handler.py
 import os
 import pandas as pd
 from tkinter import filedialog, messagebox
@@ -45,13 +44,15 @@ class ExcelHandler:
         ]
         return pending.iterrows()
 
-    def mark_executed(self, index, status="已执行"):
+    def update_case_status(self, case_name, status="已执行"):
         if self.df is not None:
-            self.df.at[index, "执行结果"] = status
-            try:
-                self.df.to_excel(self.file_path, index=False)
-                self.logger.write(f"已更新第 {index+2} 行执行状态为：{status}")
-            except PermissionError:
-                self.logger.write("[异常] 无法写入 Excel，文件可能被打开")
-            except Exception as e:
-                self.logger.write(f"[异常] Excel 写入失败：{e}")
+            idx = self.df[self.df["用例文件名"] == case_name].index
+            if not idx.empty:
+                self.df.at[idx[0], "执行结果"] = status
+                try:
+                    self.df.to_excel(self.file_path, index=False)
+                    self.logger.write(f"已更新用例 {case_name} 状态为：{status}")
+                except PermissionError:
+                    self.logger.write("[异常] 无法写入 Excel，文件可能被打开")
+                except Exception as e:
+                    self.logger.write(f"[异常] Excel 写入失败：{e}")

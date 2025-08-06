@@ -46,7 +46,6 @@ class ControlPanel:
         self.quit_btn = ttk.Button(btn_frame, text="退出", command=self.on_quit)
         self.quit_btn.pack(side="right", expand=True, ipadx=15, ipady=5, padx=10)
 
-        # 绑定快捷键
         self.window.bind_all("<F8>", lambda e: self.on_capture())
 
     def update_case(self, case_name, case_desc):

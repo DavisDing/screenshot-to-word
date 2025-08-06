@@ -4,7 +4,6 @@ import threading
 import tkinter as tk
 from tkinter import messagebox
 from tkinter import ttk
-from tkinter.scrolledtext import ScrolledText
 
 from utils.logger import Logger
 from utils.excel_handler import ExcelHandler
@@ -33,7 +32,7 @@ for d in [EXCEL_DIR, WORD_OUTPUT_DIR, LOG_DIR, TEMP_DIR]:
 class App:
     def __init__(self, root):
         self.root = root
-        self.root.title("测试截图小工具 - v1.0 作者：Haoding")
+        self.root.title("桌面自动化测试工具")
         self.root.geometry("700x500")
         self.root.configure(bg=BG_COLOR)
 
@@ -44,9 +43,7 @@ class App:
                   background=[('active', '#528bff')],
                   foreground=[('active', '#ffffff')])
 
-        # 日志框区域
         self.logger = Logger(LOG_DIR)
-        # 绑定滚动文本框到root
         self.logger.init_ui(self.root)
 
         self.excel_handler = ExcelHandler(EXCEL_DIR, self.logger)
@@ -68,12 +65,13 @@ class App:
         self.exit_btn.pack(side="left", padx=10, ipadx=15, ipady=5)
 
     def start_test(self):
+        if not self.excel_handler.load_excel():
+            return
         self.start_btn.config(state=tk.DISABLED)
         threading.Thread(target=self.test_runner.run, daemon=True).start()
 
     def on_exit(self):
         if messagebox.askokcancel("退出确认", "确定退出程序？"):
-            self.logger.close()
             self.root.destroy()
 
 def main():

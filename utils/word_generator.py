@@ -1,4 +1,3 @@
-# utils/word_generator.py
 import os
 from docx import Document
 from docx.shared import Inches
@@ -22,7 +21,6 @@ class WordGenerator:
 
         if is_new_doc:
             doc = Document()
-            # 新建时插入用例名（一级标题）和验证点（段落）
             doc.add_heading(case_name, level=1)
             p = doc.add_paragraph(f"验证点：{case_desc}")
             p.space_after = Inches(0.1)
@@ -37,19 +35,16 @@ class WordGenerator:
                 p = doc.add_paragraph(f"验证点：{case_desc}")
                 p.space_after = Inches(0.1)
 
-        # 计算已有截图数，给图注编号
         pic_count = sum(1 for p in doc.paragraphs if p.text.startswith("截图"))
         pic_number = pic_count + 1
 
         try:
             max_width = Inches(6.0)
-            # 插入图片段落
             p_pic = doc.add_paragraph()
             run = p_pic.add_run()
             run.add_picture(image_path, width=max_width)
             p_pic.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
 
-            # 插入图注段落
             caption = doc.add_paragraph(f"截图{pic_number}")
             caption.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
 
