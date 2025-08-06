@@ -75,10 +75,14 @@ class TestRunner:
             filepath = os.path.join(self.temp_dir, filename)
             try:
                 take_screenshot(filepath)
-                marked_path = launch_annotator(filepath)
-                self.word_generator.insert_case_image(case_name, case_desc, marked_path)
-                self.logger.write(f"[操作] 完成截图并插入Word：{marked_path}")
-                messagebox.showinfo("截图完成", "截图已保存并插入Word文档！")
+                
+                def on_annotation_complete(marked_path):
+                    self.word_generator.insert_case_image(case_name, case_desc, marked_path)
+                    self.logger.write(f"[操作] 完成截图并插入Word：{marked_path}")
+                    # 在主线程中显示消息
+                    self.root.after(0, lambda: messagebox.showinfo("截图完成", "截图已保存并插入Word文档！"))
+                
+                launch_annotator(filepath, on_annotation_complete)
             except Exception as e:
                 self.logger.write(f"[异常] 截图或插图失败：{e}")
 

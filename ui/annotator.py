@@ -1,10 +1,36 @@
 import tkinter as tk
 from tkinter import simpledialog, messagebox
 from PIL import Image, ImageTk, ImageDraw
+import threading
 
-def launch_annotator(image_path):
-    Annotator(image_path).run()
-    return image_path.replace(".png", "_marked.png")
+def launch_annotator(image_path, callback=None):
+    def run_annotator():
+        annotator = Annotator(image_path)
+        annotator.run()
+        # 保存后调用insert_case_image函数
+        from utils.word_generator import WordGenerator
+        import os
+        # 获取基础目录和用例名称
+        base_dir = os.path.dirname(os.path.dirname(image_path))
+        case_name = os.path.basename(image_path).split('_')[0] 
+        case_desc = "截图验证"
+        
+        # 创建一个简单的logger模拟
+        class SimpleLogger:
+            def write(self, msg):
+                print(msg)
+        
+        # 调用insert_case_image函数
+        word_gen = WordGenerator(base_dir, SimpleLogger())
+        marked_image_path = image_path.replace(".png", "_marked.png")
+        word_gen.insert_case_image(case_name, case_desc, marked_image_path)
+        
+        if callback:
+            callback(marked_image_path)
+    
+    # 在新线程中运行标注器，避免阻塞主线程
+    thread = threading.Thread(target=run_annotator, daemon=True)
+    thread.start()
 
 class Annotator:
     def __init__(self, image_path):
@@ -12,20 +38,28 @@ class Annotator:
         self.root = tk.Toplevel()
         self.root.title("截图标注 - ESC 或 点击保存退出")
         self.root.attributes("-topmost", True)
-        window_width =  self._get_image_width(image_path) + 20
-        window_height = self._get_image_height(image_path) + 60
+        
+        # 获取图片尺寸并自适应窗口大小
+        with Image.open(image_path) as img:
+            self.img_width, self.img_height = img.size
+        
+        # 根据图片大小自适应窗口，设置最大和最小尺寸
+        window_width = min(max(self.img_width + 20, 400), 1200)
+        window_height = min(max(self.img_height + 60, 300), 800)
+        
         self.root.geometry(f"{window_width}x{window_height}+100+100")
         self.root.configure(bg='gray')
-        self.root.resizable(False, False)
+        # 允许窗口调整大小
+        self.root.resizable(True, True)
 
         self.original = Image.open(image_path)
         self.image = self.original.copy()
         self.draw = ImageDraw.Draw(self.image)
 
         self.tk_image = ImageTk.PhotoImage(self.image)
-        self.canvas = tk.Canvas(self.root, width=self.image.width, height=self.image.height)
+        self.canvas = tk.Canvas(self.root, width=min(self.img_width, window_width-20), height=min(self.img_height, window_height-60))
         self.canvas.create_image(0, 0, anchor="nw", image=self.tk_image, tags="image")
-        self.canvas.pack(padx=10, pady=5)
+        self.canvas.pack(padx=10, pady=5, fill=tk.BOTH, expand=True)
 
         self.start_x = None
         self.start_y = None
