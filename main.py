@@ -1,50 +1,71 @@
-# main.py
 import os
+import sys
+import threading
 import tkinter as tk
 from tkinter import messagebox
-from core.test_runner import TestRunner
+
 from utils.logger import Logger
 from utils.excel_handler import ExcelHandler
+from core.test_runner import TestRunner
 
-class DesktopTestTool:
-    def __init__(self):
-        self.base_dir = os.path.dirname(os.path.abspath(__file__))
-        os.chdir(self.base_dir)
-        self.ensure_directories()
+def get_base_dir():
+    # 运行时获取exe所在目录，打包后生效
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
 
-        self.logger = Logger()
-        self.excel_handler = ExcelHandler(self.logger)
-        self.test_runner = None
+BASE_DIR = get_base_dir()
+EXCEL_DIR = os.path.join(BASE_DIR, "excel_input")
+WORD_OUTPUT_DIR = os.path.join(BASE_DIR, "word_output")
+LOG_DIR = os.path.join(BASE_DIR, "logs")
+TEMP_DIR = os.path.join(BASE_DIR, "Temp")
 
-        self.root = tk.Tk()
-        self.root.title("桌面自动化测试工具")
-        self.root.geometry("300x150")
-        self.create_widgets()
-        self.root.protocol("WM_DELETE_WINDOW", self.on_exit)
+for d in [EXCEL_DIR, WORD_OUTPUT_DIR, LOG_DIR, TEMP_DIR]:
+    os.makedirs(d, exist_ok=True)
 
-    def ensure_directories(self):
-        for folder in ['excel_input', 'word_output', 'logs']:
-            os.makedirs(folder, exist_ok=True)
+class App:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("测试截图小工具")
+        self.root.geometry("700x500")
 
-    def create_widgets(self):
-        tk.Button(self.root, text="开始执行", width=20, height=2, command=self.start_execution).pack(pady=15)
-        tk.Button(self.root, text="退出", width=20, height=1, command=self.on_exit).pack()
+        self.logger = Logger(LOG_DIR)
+        self.logger.init_ui(self.root)
 
-    def start_execution(self):
-        try:
-            self.test_runner = TestRunner(self.logger, self.excel_handler, self.root)
-            self.test_runner.run()
-        except Exception as e:
-            self.logger.log(f"启动失败: {str(e)}")
-            messagebox.showerror("错误", f"启动执行失败：{e}")
+        self.excel_handler = ExcelHandler(EXCEL_DIR, self.logger)
+        self.test_runner = TestRunner(
+            root=self.root,
+            excel_handler=self.excel_handler,
+            logger=self.logger,
+            word_output_dir=WORD_OUTPUT_DIR,
+            temp_dir=TEMP_DIR
+        )
+
+        btn_frame = tk.Frame(self.root)
+        btn_frame.pack(pady=10)
+
+        self.start_btn = tk.Button(btn_frame, text="开始执行", width=15, height=2, command=self.start_test)
+        self.start_btn.pack(side="left", padx=10)
+
+        self.exit_btn = tk.Button(btn_frame, text="退出", width=15, height=2, command=self.on_exit)
+        self.exit_btn.pack(side="left", padx=10)
+
+        self.root.bind('<Control-s>', lambda event: self.start_test())
+        self.root.bind('<Control-q>', lambda event: self.on_exit())
+
+    def start_test(self):
+        self.start_btn.config(state=tk.DISABLED)
+        threading.Thread(target=self.test_runner.run, daemon=True).start()
 
     def on_exit(self):
-        if messagebox.askyesno("退出确认", "是否确认退出？"):
+        if messagebox.askokcancel("退出确认", "确定退出程序？"):
+            self.logger.close()
             self.root.destroy()
 
-    def run(self):
-        self.root.mainloop()
+def main():
+    root = tk.Tk()
+    app = App(root)
+    root.mainloop()
 
-if __name__ == '__main__':
-    app = DesktopTestTool()
-    app.run()
+if __name__ == "__main__":
+    main()

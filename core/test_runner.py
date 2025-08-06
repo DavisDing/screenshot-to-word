@@ -1,134 +1,105 @@
 # core/test_runner.py
+import os
 import threading
+import time
 import tkinter as tk
 from tkinter import messagebox
+
 from ui.control_panel import ControlPanel
-from core.screenshot import Screenshot
-import time
-import os
-from docx import Document
-from docx.shared import Inches
-from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
+from core.screenshot import take_screenshot
+from ui.annotator import launch_annotator
+from utils.word_generator import WordGenerator
 
 class TestRunner:
-    def __init__(self, logger, excel_handler, root):
-        self.logger = logger
-        self.excel_handler = excel_handler
+    def __init__(self, root, excel_handler, logger, word_output_dir, temp_dir):
         self.root = root
+        self.excel_handler = excel_handler
+        self.logger = logger
+        self.word_output_dir = word_output_dir
+        self.temp_dir = temp_dir
 
         self.control_panel = None
+        self.word_generator = WordGenerator(self.word_output_dir, self.logger)
+        self.pending_cases = []
         self.current_index = 0
-        self.cases_df = None
-        self.thread = None
-        self.stop_event = threading.Event()
+        self.quit_requested = False
+        self.case_executed = False  # 是否已完成截图和插图
 
     def run(self):
-        file_path = self.excel_handler.select_excel_file()
-        if not file_path:
-            self.logger.log("未选择Excel文件，终止执行")
-            return
-
         if not self.excel_handler.load_excel():
-            self.logger.log("Excel加载失败，终止执行")
             return
 
-        self.cases_df = self.excel_handler.get_valid_cases()
-        if self.cases_df.empty:
-            messagebox.showinfo("提示", "无有效未执行用例")
-            self.logger.log("无有效未执行用例，结束流程")
+        self.pending_cases = list(self.excel_handler.get_pending_cases())
+        total = len(self.pending_cases)
+
+        if total == 0:
+            messagebox.showinfo("提示", "没有需要执行的用例。")
             return
 
-        self.root.withdraw()
-        self.logger.log(f"开始执行，共{len(self.cases_df)}条用例")
+        self.logger.write(f"共加载 {total} 条待执行用例。")
+        self.control_panel = ControlPanel(on_capture=self.capture_screenshot,
+                                          on_next=self.complete_case,
+                                          on_skip=self.skip_case,
+                                          on_quit=self.confirm_quit)
+        self.next_case()
 
-        self.stop_event.clear()
-        self.thread = threading.Thread(target=self._process_cases)
-        self.thread.daemon = True
-        self.thread.start()
+    def next_case(self):
+        if self.quit_requested:
+            return
 
-    def _process_cases(self):
-        total = len(self.cases_df)
-        while self.current_index < total and not self.stop_event.is_set():
-            case = self.cases_df.iloc[self.current_index]
-            case_name = str(case.iloc[0])
-            verify_point = str(case.iloc[1])
+        if self.current_index >= len(self.pending_cases):
+            messagebox.showinfo("完成", "所有用例已执行完毕。")
+            self.logger.write("✅ 所有用例执行完成。")
+            self.control_panel.destroy()
+            return
 
-            self.logger.log(f"执行用例[{self.current_index+1}/{total}]: {case_name} - {verify_point}")
+        idx, row = self.pending_cases[self.current_index]
+        self.case_index = idx
+        self.case_name = str(row["用例文件名"]).strip()
+        self.case_desc = str(row["验证点"]).strip()
+        self.case_executed = False  # 重置执行状态
 
-            self._show_control_panel(case_name, verify_point)
+        self.logger.write(f"➡️ 当前用例：{self.case_name} - {self.case_desc}")
+        self.control_panel.update_case(self.case_name, self.case_desc)
 
-            self.control_panel.wait_event.wait()
+    def capture_screenshot(self):
+        filename = f"{self.case_name}_{int(time.time())}.png"
+        temp_path = os.path.join(self.temp_dir, filename)
+        take_screenshot(temp_path)
 
-            if self.control_panel.exit_flag:
-                self.logger.log("用户请求退出执行")
-                break
+        marked_path = launch_annotator(temp_path)
+        if not marked_path:
+            self.logger.write("⚠️ 用户取消标注")
+            return
 
-            if self.control_panel.skip_flag:
-                self.logger.log(f"跳过用例：{case_name}")
-                self.current_index += 1
-                continue
+        self.word_generator.insert_case_image(self.case_name, self.case_desc, marked_path)
+        self.excel_handler.mark_executed(self.case_index, status="已执行")
+        self.case_executed = True
 
-            if self.control_panel.screenshot_done:
-                saved_img_path = self.control_panel.screenshot_path
-                self.logger.log(f"截图标注完成，文件：{saved_img_path}")
-
-                # 插入Word逻辑
-                word_file = self._add_image_to_word(case_name, verify_point, saved_img_path)
-                self.logger.log(f"图片插入Word文档：{word_file}")
-
-                # 更新Excel状态
-                self.excel_handler.update_case_status(self.cases_df.index[self.current_index], "已执行")
-                self.logger.log(f"用例标记为已执行：{case_name}")
-
-                self.current_index += 1
-
-            self.root.after(0, self.control_panel.destroy)
-            self.control_panel = None
-
-        self.logger.log("所有用例执行完毕或已停止")
-        self.root.after(0, self._finish_execution)
-
-    def _show_control_panel(self, case_name, verify_point):
-        event = threading.Event()
-
-        def create_panel():
-            self.control_panel = ControlPanel(self.root, case_name, verify_point, event)
-
-        self.root.after(0, create_panel)
-        event.wait()
-
-    def _finish_execution(self):
-        messagebox.showinfo("完成", "所有用例已执行完毕")
-        self.root.deiconify()
-        self.current_index = 0
-        self.cases_df = None
-
-    def stop(self):
-        self.stop_event.set()
-        if self.control_panel:
-            self.control_panel.exit_flag = True
-            self.control_panel.wait_event.set()
-
-    def _add_image_to_word(self, case_name, verify_point, image_path):
-        folder = os.path.join(os.getcwd(), "word_output", case_name)
-        os.makedirs(folder, exist_ok=True)
-        word_path = os.path.join(folder, f"{case_name}.docx")
-
-        if os.path.exists(word_path):
-            doc = Document(word_path)
+        if messagebox.askyesno("截图完成", "是否继续当前用例截图？\n是：继续当前截图\n否：进入下一条用例"):
+            self.logger.write("📌 用户选择继续截图")
         else:
-            doc = Document()
-            doc.add_heading(f"用例名：{case_name}", level=1)
-            doc.add_paragraph(f"验证点：{verify_point}")
+            self.current_index += 1
+            self.next_case()
 
-        para = doc.add_paragraph()
-        run = para.add_run()
-        run.add_picture(image_path, width=Inches(6))
+    def complete_case(self):
+        if not self.case_executed:
+            messagebox.showwarning("未完成截图", "请先截图并完成插图后再点击完成。")
+            return
+        self.logger.write(f"✅ 用例完成：{self.case_name}")
+        self.current_index += 1
+        self.next_case()
 
-        caption = f"截图 - {os.path.basename(image_path)}"
-        caption_para = doc.add_paragraph(caption)
-        caption_para.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+    def skip_case(self):
+        self.logger.write(f"⏭️ 跳过用例：{self.case_name}")
+        self.current_index += 1
+        self.next_case()
 
-        doc.add_paragraph()
-        doc.save(word_path)
-        return word_path
+    def confirm_quit(self):
+        done = self.current_index
+        remain = len(self.pending_cases) - done
+        if messagebox.askokcancel("确认退出", f"已执行 {done} 条，还剩 {remain} 条未执行，是否退出？"):
+            self.quit_requested = True
+            self.logger.write("❌ 用户手动退出执行流程。")
+            if self.control_panel:
+                self.control_panel.destroy()

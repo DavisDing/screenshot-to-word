@@ -1,87 +1,40 @@
 # ui/control_panel.py
-import threading
-from core.screenshot import Screenshot
-from ui.annotator import Annotator
 import tkinter as tk
-from tkinter import messagebox
 
-class ControlPanel(tk.Toplevel):
-    def __init__(self, master, case_name, verify_point, wait_event):
-        super().__init__(master)
-        self.case_name = case_name
-        self.verify_point = verify_point
-        self.wait_event = wait_event
+class ControlPanel:
+    def __init__(self, on_capture, on_next, on_skip, on_quit):
+        self.window = tk.Toplevel()
+        self.window.title("测试控制面板")
+        self.window.geometry("400x200")
+        self.window.attributes('-topmost', True)
+        self.window.resizable(False, False)
 
-        self.screenshot_obj = Screenshot()
-        self.screenshot_done = False
-        self.screenshot_path = None
-        self.skip_flag = False
-        self.exit_flag = False
+        self.on_capture = on_capture
+        self.on_next = on_next
+        self.on_skip = on_skip
+        self.on_quit = on_quit
 
-        self.title("控制面板")
-        self.geometry("400x180")
-        self.attributes("-topmost", True)
-        self.protocol("WM_DELETE_WINDOW", self.on_exit)
+        self.case_label = tk.Label(self.window, text="用例：", font=("微软雅黑", 12), wraplength=380, justify="left")
+        self.case_label.pack(pady=10)
 
-        self.create_widgets()
-        self._init_bindings()
+        self.capture_btn = tk.Button(self.window, text="截图 (F8)", width=20, height=2, command=self.on_capture)
+        self.capture_btn.pack(pady=5)
 
-        self.wait_event.set()  # 通知创建完成
+        self.next_btn = tk.Button(self.window, text="完成当前用例", width=20, height=2, command=self.on_next)
+        self.next_btn.pack(pady=5)
 
-    def create_widgets(self):
-        tk.Label(self, text=f"用例名：{self.case_name}", font=("Arial", 12)).pack(pady=5)
-        tk.Label(self, text=f"验证点：{self.verify_point}", font=("Arial", 10), wraplength=380).pack(pady=5)
+        self.skip_btn = tk.Button(self.window, text="跳过", width=10, command=self.on_skip)
+        self.skip_btn.pack(side="left", padx=20, pady=10)
 
-        btn_frame = tk.Frame(self)
-        btn_frame.pack(pady=10)
+        self.quit_btn = tk.Button(self.window, text="退出", width=10, command=self.on_quit)
+        self.quit_btn.pack(side="right", padx=20, pady=10)
 
-        self.btn_screenshot = tk.Button(btn_frame, text="截图 (F8)", width=10, command=self.on_screenshot)
-        self.btn_screenshot.grid(row=0, column=0, padx=5)
+        # 绑定快捷键
+        self.window.bind_all("<F8>", lambda e: self.on_capture())
 
-        self.btn_complete = tk.Button(btn_frame, text="完成", width=10, command=self.on_complete)
-        self.btn_complete.grid(row=0, column=1, padx=5)
+    def update_case(self, case_name, case_desc):
+        text = f"用例名：{case_name}\n验证点：{case_desc}"
+        self.case_label.config(text=text)
 
-        self.btn_skip = tk.Button(btn_frame, text="跳过", width=10, command=self.on_skip)
-        self.btn_skip.grid(row=0, column=2, padx=5)
-
-        self.btn_exit = tk.Button(self, text="退出", width=10, command=self.on_exit)
-        self.btn_exit.pack(pady=5)
-
-    def _init_bindings(self):
-        self.bind_all("<F8>", lambda e: self.on_screenshot())
-
-    def on_screenshot(self):
-        filepath = self.screenshot_obj.take_screenshot(self.case_name)
-        if not filepath:
-            messagebox.showerror("错误", "截图失败！")
-            return
-
-        def save_callback(saved_path):
-            self.screenshot_done = True
-            self.screenshot_path = saved_path
-            self.wait_event.set()  # 标注完成通知主流程
-
-        def open_annotator():
-            annotator = Annotator(self, filepath, save_callback)
-            annotator.grab_set()
-            annotator.focus_set()
-            annotator.wait_window()
-
-        # 在主线程调用标注窗口
-        threading.Thread(target=lambda: self.master.after(0, open_annotator)).start()
-
-    def on_complete(self):
-        if not self.screenshot_done:
-            if not messagebox.askyesno("确认", "未截图，是否确认完成？"):
-                return
-        self.wait_event.set()
-
-    def on_skip(self):
-        if messagebox.askyesno("跳过确认", "确认跳过当前用例？"):
-            self.skip_flag = True
-            self.wait_event.set()
-
-    def on_exit(self):
-        if messagebox.askyesno("退出确认", "确认退出当前测试流程？"):
-            self.exit_flag = True
-            self.wait_event.set()
+    def destroy(self):
+        self.window.destroy()
