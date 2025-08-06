@@ -57,11 +57,10 @@ class TestRunner:
 
         marked_path = launch_annotator(image_path)
         # 用户是否满意当前截图？
-        resp = messagebox.askyesno("截图完成", "是否继续截图？\n选择“否”将进入下一条用例。")
+        resp = messagebox.askyesno("截图完成", "是否继续截图？\n点击“是”将使用当前截图继续写入文档。\n点击“否”跳过本条用例。")
         if resp:
-            return  # 用户想继续截图，不执行插图与更新
-        self.insert_to_word(filename, row['验证点'], marked_path)
-        self.excel_handler.mark_as_executed(self.current_index)
+            self.insert_to_word(filename, row['验证点'], marked_path)
+            self.excel_handler.mark_as_executed(self.current_index)
         self.control_panel.reset_action()
 
     def on_skip(self):
