@@ -4,12 +4,14 @@ from openpyxl import load_workbook
 from tkinter import messagebox
 
 class ExcelHandler:
-    def __init__(self, logger=None):
+    # 修改初始化方法，接受可选的excel_dir和logger参数
+    def __init__(self, excel_dir=None, logger=None):
         self.logger = logger
         self.file_path = None
         self.df = None
         self.workbook = None
         self.sheet_name = None
+        self.excel_dir = excel_dir or 'excel_input'
 
     def select_excel_file(self):
         files = [f for f in os.listdir('excel_input') if f.endswith('.xlsx') or f.endswith('.xls')]

@@ -46,7 +46,8 @@ class App:
         self.logger = Logger(LOG_DIR)
         self.logger.init_ui(self.root)
 
-        self.excel_handler = ExcelHandler(EXCEL_DIR, self.logger)
+        # 修改ExcelHandler初始化方式，只传递需要的参数
+        self.excel_handler = ExcelHandler(excel_dir=EXCEL_DIR, logger=self.logger)
         self.test_runner = TestRunner(
             root=self.root,
             excel_handler=self.excel_handler,
