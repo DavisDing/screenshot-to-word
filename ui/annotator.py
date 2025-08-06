@@ -1,4 +1,3 @@
-# ui/annotator.py
 import tkinter as tk
 from tkinter import simpledialog, messagebox
 from PIL import Image, ImageTk, ImageDraw
@@ -11,42 +10,25 @@ def launch_annotator(image_path):
 class Annotator:
     def __init__(self, image_path):
         self.image_path = image_path
-
-        # 读取图片
-        self.original = Image.open(image_path)
-        self.image = self.original.copy()
-        self.draw = ImageDraw.Draw(self.image)
-
-        # 初始化窗口，使用自适应图片尺寸（非全屏）
         self.root = tk.Toplevel()
-        self.root.title("截图标注")
+        self.root.title("截图标注 - ESC 或 点击保存退出")
         self.root.attributes("-topmost", True)
-        window_width = self.image.width + 20
-        window_height = self.image.height + 60
+        # 自适应大小，不全屏
+        window_width =  self._get_image_width(image_path) + 20
+        window_height = self._get_image_height(image_path) + 60
         self.root.geometry(f"{window_width}x{window_height}+100+100")
         self.root.configure(bg='gray')
         self.root.resizable(False, False)
 
-        # 顶部工具栏：嵌入保存按钮
-        toolbar = tk.Frame(self.root, bg='gray')
-        toolbar.pack(side="top", fill="x", pady=5)
+        self.original = Image.open(image_path)
+        self.image = self.original.copy()
+        self.draw = ImageDraw.Draw(self.image)
 
-        save_btn = tk.Button(
-            toolbar,
-            text="✅ 保存标注并退出",
-            command=self.save_and_close,
-            bg="#4CAF50", fg="white",
-            font=("Arial", 11, "bold")
-        )
-        save_btn.pack(side="right", padx=15)
-
-        # 图像显示区域
-        self.canvas = tk.Canvas(self.root, width=self.image.width, height=self.image.height)
         self.tk_image = ImageTk.PhotoImage(self.image)
+        self.canvas = tk.Canvas(self.root, width=self.image.width, height=self.image.height)
         self.canvas.create_image(0, 0, anchor="nw", image=self.tk_image, tags="image")
         self.canvas.pack(padx=10, pady=5)
 
-        # 标注操作绑定
         self.start_x = None
         self.start_y = None
         self.rect = None
@@ -55,7 +37,27 @@ class Annotator:
         self.canvas.bind("<B1-Motion>", self.on_left_drag)
         self.canvas.bind("<ButtonRelease-1>", self.on_left_up)
         self.canvas.bind("<Button-3>", self.on_right_click)
-        self.root.bind("<Escape>", self.save_and_close)
+        self.root.bind("<Escape>", self.on_escape)
+
+        # 嵌入顶部保存按钮
+        toolbar = tk.Frame(self.root, bg='gray')
+        toolbar.pack(side="top", fill="x", pady=2)
+        save_btn = tk.Button(
+            toolbar,
+            text="✅ 保存标注并退出",
+            command=self.save_and_close,
+            bg="#4CAF50", fg="white",
+            font=("Arial", 12, "bold")
+        )
+        save_btn.pack(side="right", padx=10, pady=2)
+
+    def _get_image_width(self, path):
+        with Image.open(path) as img:
+            return img.width
+
+    def _get_image_height(self, path):
+        with Image.open(path) as img:
+            return img.height
 
     def on_left_down(self, event):
         self.start_x = event.x
@@ -103,9 +105,17 @@ class Annotator:
     def save_and_close(self, event=None):
         if messagebox.askyesno("退出确认", "是否保存标注并退出？"):
             save_path = self.image_path.replace(".png", "_marked.png")
-            self.image.save(save_path)
-            print(f"✅ 标注已保存：{save_path}")
+            try:
+                self.image.save(save_path)
+                print(f"✅ 标注已保存：{save_path}")
+            except Exception as e:
+                print(f"❌ 保存失败：{e}")
+                messagebox.showerror("保存失败", f"保存标注时出错：{e}")
         self.root.destroy()
+
+    def on_escape(self, event=None):
+        # ESC 调用保存退出
+        self.save_and_close()
 
     def run(self):
         self.root.mainloop()
