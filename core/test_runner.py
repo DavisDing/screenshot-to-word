@@ -56,7 +56,6 @@ class TestRunner:
         take_screenshot(image_path)
 
         marked_path = launch_annotator(image_path)
-        # 用户是否满意当前截图？
         resp = messagebox.askyesno("截图完成", "是否继续截图？\n点击“是”将使用当前截图继续写入文档。\n点击“否”跳过本条用例。")
         if resp:
             self.insert_to_word(filename, row['验证点'], marked_path)
