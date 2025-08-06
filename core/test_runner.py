@@ -104,7 +104,7 @@ class TestRunner:
             # 弹窗提示是否继续当前用例截图
             res = messagebox.askyesno(
                 "继续截图",
-                f"是否继续当前用例“{case_name}”截图？\n点击“否”进入下一条用例。"
+                f"是否继续当前用例“{case_name}”截图？\n点击“否”进入下一条用例。", parent=self.root
             )
             if res:
                 self.logger.write(f"[INFO] 继续当前用例截图：{case_name}")

@@ -103,7 +103,7 @@ class Annotator:
         self.canvas.create_image(0, 0, anchor="nw", image=self.tk_image, tags="image")
 
     def save_and_close(self, event=None):
-        if messagebox.askyesno("退出确认", "是否保存标注并退出？"):
+        if messagebox.askyesno("退出确认", "是否保存标注并退出？", parent=self.root):
             save_path = self.image_path.replace(".png", "_marked.png")
             try:
                 self.image.save(save_path)
