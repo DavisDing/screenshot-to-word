@@ -84,6 +84,16 @@ class Annotator:
             font=("Arial", 12, "bold")
         )
         save_btn.pack(side="right", padx=10, pady=2)
+        
+        # 添加说明文本，让用户知道如何保存
+        instruction_label = tk.Label(
+            toolbar, 
+            text="右键添加文字 | 拖拽绘制圆圈 | Ctrl+Z撤销 | Ctrl+S保存 | ESC退出",
+            bg='gray',
+            fg='white',
+            font=("Arial", 9)
+        )
+        instruction_label.pack(side="left", padx=5, pady=2)
 
     def _get_image_width(self, path):
         with Image.open(path) as img:
