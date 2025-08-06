@@ -1,82 +1,80 @@
 import os
+import time
 import threading
-import tkinter as tk
 from tkinter import messagebox
-from core.screenshot import take_screenshot_and_annotate
-from utils.excel_handler import ExcelHandler
-from utils.logger import Logger
 from ui.control_panel import ControlPanel
+from core.screenshot import take_screenshot
+from ui.annotator import launch_annotator
 from docx import Document
 from docx.shared import Inches
+from datetime import datetime
 
 class TestRunner:
-    def __init__(self, excel_path):
-        self.excel_handler = ExcelHandler(excel_path)
-        self.logger = Logger()
-        self.test_cases = self.excel_handler.get_pending_cases()
-        self.current_index = 0
-        self.control_panel = ControlPanel(self)
-        self.word_docs = {}
+    def __init__(self, logger, excel_handler):
+        self.logger = logger
+        self.excel_handler = excel_handler
+        self.control_panel = None
+        self.stop_flag = threading.Event()
 
-    def start(self):
-        self.logger.log("测试执行开始")
-        threading.Thread(target=self.run_tests, daemon=True).start()
+    def run(self):
+        cases = self.excel_handler.load_cases()
+        if not cases:
+            messagebox.showinfo("提示", "未发现可执行的用例")
+            return
 
-    def run_tests(self):
-        while self.current_index < len(self.test_cases):
-            case = self.test_cases[self.current_index]
-            filename = case['filename']
-            description = case['description']
-            self.logger.log(f"当前用例：{filename}，验证点：{description}")
-            self.control_panel.update_case_info(filename, description)
-            self.control_panel.enable_controls(True)
-            break  # 等待用户点击“截图”或快捷键
+        self.control_panel = ControlPanel(self.on_screenshot, self.on_skip, self.on_exit)
+        self.logger.log(f"加载 {len(cases)} 条用例，开始执行...\n")
 
-    def capture_screenshot(self):
-        case = self.test_cases[self.current_index]
-        filename = case['filename']
-        description = case['description']
-        image_path = take_screenshot_and_annotate(filename, description)
-        self.logger.log(f"截图保存：{image_path}")
-        self.insert_into_word(filename, description, image_path)
-        self.excel_handler.mark_case_as_executed(self.current_index)
-        self.logger.log("Excel 状态更新：已执行")
+        for idx, row in cases.iterrows():
+            self.current_index = idx
+            filename = row['文件名']
+            checkpoint = row['验证点']
+            self.logger.log(f"执行用例：{filename} - {checkpoint}")
+            self.control_panel.update_case(filename, checkpoint)
+            self.control_panel.wait_for_action()
 
-        if messagebox.askyesno("继续操作", "是否继续截图当前用例？"):
-            return  # 不进入下一条
-        else:
-            self.next_case()
+            if self.stop_flag.is_set():
+                break
 
-    def next_case(self):
-        self.current_index += 1
-        if self.current_index < len(self.test_cases):
-            self.run_tests()
-        else:
-            self.logger.log("所有用例执行完毕")
-            messagebox.showinfo("完成", "所有用例已执行完成。")
-            self.control_panel.enable_controls(False)
+        self.logger.log("全部用例执行完毕。\n")
+        messagebox.showinfo("完成", "所有用例已执行完毕")
+        self.control_panel.destroy()
 
-    def skip_case(self):
-        self.logger.log("跳过当前用例")
-        self.next_case()
+    def on_screenshot(self):
+        row = self.excel_handler.df.loc[self.current_index]
+        filename = row['文件名']
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        image_path = os.path.join("word_output", filename, f"{filename}_{timestamp}.png")
+        os.makedirs(os.path.dirname(image_path), exist_ok=True)
+        take_screenshot(image_path)
 
-    def insert_into_word(self, filename, description, image_path):
-        folder = os.path.join("word_output")
-        os.makedirs(folder, exist_ok=True)
-        doc_path = os.path.join(folder, f"{filename}.docx")
+        edited_image = launch_annotator(image_path)
+        self.insert_to_word(filename, row['验证点'], edited_image)
+        self.excel_handler.mark_as_executed(self.current_index)
+        self.control_panel.reset_action()
 
-        if filename not in self.word_docs:
+    def on_skip(self):
+        self.logger.log("用户跳过当前用例\n")
+        self.excel_handler.mark_as_executed(self.current_index)
+        self.control_panel.reset_action()
+
+    def on_exit(self):
+        self.stop_flag.set()
+        self.control_panel.destroy()
+
+    def insert_to_word(self, filename, checkpoint, image_path):
+        doc_path = os.path.join("word_output", f"{filename}.docx")
+        try:
             if os.path.exists(doc_path):
                 doc = Document(doc_path)
             else:
                 doc = Document()
-                doc.add_heading(filename, level=1)
-                doc.add_paragraph(f"验证点：{description}")
-            self.word_docs[filename] = doc
+                doc.add_heading(f"验证点：{filename}", level=1)
+                doc.add_paragraph(checkpoint)
 
-        doc = self.word_docs[filename]
-        doc.add_picture(image_path, width=Inches(5.5))
-        doc.add_paragraph("")
-
-        doc.save(doc_path)
-        self.logger.log(f"截图插入 Word：{doc_path}")
+            doc.add_picture(image_path, width=Inches(5))
+            doc.add_paragraph("\n")
+            doc.save(doc_path)
+            self.logger.log(f"截图保存并写入 Word：{doc_path}\n")
+        except Exception as e:
+            self.logger.log(f"写入 Word 失败：{e}", level="error")

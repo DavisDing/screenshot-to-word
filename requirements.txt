@@ -4,3 +4,4 @@ python-docx
 pyautogui
 keyboard
 Pillow
+tk

@@ -1,36 +1,80 @@
-import os
 import tkinter as tk
 from PIL import Image, ImageTk, ImageDraw
-class Annotator(tk.Toplevel):
-    def __init__(self, image_path, on_save):
-        super().__init__()
-        self.title("标注截图")
-        self.attributes("-fullscreen", True)
-        self.image = Image.open(image_path)
+import os
+
+def launch_annotator(image_path):
+    Annotator(image_path).run()
+    return image_path
+
+class Annotator:
+    def __init__(self, image_path):
+        self.image_path = image_path
+        self.root = tk.Toplevel()
+        self.root.attributes('-fullscreen', True)
+        self.root.title("截图标注器 - ESC退出")
+
+        self.original = Image.open(image_path)
+        self.image = self.original.copy()
+        self.tk_image = ImageTk.PhotoImage(self.image)
+        self.canvas = tk.Canvas(self.root, width=self.image.width, height=self.image.height)
+        self.canvas.pack()
+
         self.draw = ImageDraw.Draw(self.image)
-        self.canvas = tk.Canvas(self)
-        self.canvas.pack(fill="both", expand=True)
-        self.tk_img = ImageTk.PhotoImage(self.image)
-        self.canvas.create_image(0, 0, anchor="nw", image=self.tk_img)
-        self.bind("<Escape>", lambda e: self.destroy())
-        self.canvas.bind("<B1-Motion>", self.paint)
-        self.canvas.bind("<Button-3>", self.write_text)
-        self.on_save = on_save
+        self.start_x = None
+        self.start_y = None
+        self.rect = None
 
-    def paint(self, event):
-        x, y = event.x, event.y
-        r = 20
-        self.canvas.create_oval(x-r, y-r, x+r, y+r, outline="red", width=3)
-        self.draw.ellipse((x-r, y-r, x+r, y+r), outline="red", width=3)
+        self.canvas.create_image(0, 0, anchor='nw', image=self.tk_image)
+        self.canvas.bind('<ButtonPress-1>', self.on_left_down)
+        self.canvas.bind('<B1-Motion>', self.on_left_drag)
+        self.canvas.bind('<ButtonRelease-1>', self.on_left_up)
+        self.canvas.bind('<Button-3>', self.on_right_click)
+        self.root.bind('<Escape>', self.on_escape)
 
-    def write_text(self, event):
-        text = "标注"
-        self.canvas.create_text(event.x, event.y, text=text, fill="blue", font=("Arial", 14))
-        self.draw.text((event.x, event.y), text, fill="blue")
+    def on_left_down(self, event):
+        self.start_x = event.x
+        self.start_y = event.y
 
-    def destroy(self):
-        path = os.path.join("temp", "annotated.png")
-        os.makedirs("temp", exist_ok=True)
-        self.image.save(path)
-        self.on_save(path)
-        super().destroy()
+    def on_left_drag(self, event):
+        if self.rect:
+            self.canvas.delete(self.rect)
+        self.rect = self.canvas.create_oval(self.start_x, self.start_y, event.x, event.y, outline='red', width=2)
+
+    def on_left_up(self, event):
+        self.draw.ellipse([self.start_x, self.start_y, event.x, event.y], outline='red', width=2)
+        self.update_image()
+
+    def on_right_click(self, event):
+        text = self.get_text_input()
+        if text:
+            self.draw.text((event.x, event.y), text, fill='blue')
+            self.update_image()
+
+    def get_text_input(self):
+        input_win = tk.Toplevel(self.root)
+        input_win.title("输入文字")
+        input_box = tk.Entry(input_win)
+        input_box.pack(padx=10, pady=10)
+        result = {'text': None}
+
+        def confirm():
+            result['text'] = input_box.get()
+            input_win.destroy()
+
+        tk.Button(input_win, text="确定", command=confirm).pack()
+        input_win.wait_window()
+        return result['text']
+
+    def on_escape(self, event):
+        self.save_and_close()
+
+    def update_image(self):
+        self.tk_image = ImageTk.PhotoImage(self.image)
+        self.canvas.create_image(0, 0, anchor='nw', image=self.tk_image)
+
+    def save_and_close(self):
+        self.image.save(self.image_path)
+        self.root.destroy()
+
+    def run(self):
+        self.root.mainloop()

@@ -1,9 +1,7 @@
 import pyautogui
-import tempfile
-import os
+import time
 
-def take_screenshot():
+def take_screenshot(path):
+    time.sleep(0.5)  # 短暂延迟以避免截到控制面板
     screenshot = pyautogui.screenshot()
-    temp_file = os.path.join(tempfile.gettempdir(), 'screenshot.png')
-    screenshot.save(temp_file)
-    return temp_file
+    screenshot.save(path)

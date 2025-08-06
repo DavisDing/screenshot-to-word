@@ -1,26 +1,28 @@
-import logging
-from tkinter import scrolledtext, Toplevel, BOTH
+import os
+import datetime
+import tkinter as tk
 
 class Logger:
-    def __init__(self, log_path):
-        self.log_path = log_path
-        self.window = None
+    def __init__(self):
         self.text_widget = None
-        self._setup_logger()
+        log_dir = "logs"
+        os.makedirs(log_dir, exist_ok=True)
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.log_path = os.path.join(log_dir, f"log_{timestamp}.txt")
 
-    def _setup_logger(self):
-        logging.basicConfig(filename=self.log_path, level=logging.INFO, format='%(asctime)s - %(message)s')
+    def attach_text_widget(self, widget: tk.Text):
+        self.text_widget = widget
 
-    def create_window(self):
-        self.window = Toplevel()
-        self.window.title("执行日志")
-        self.window.geometry("500x300")
-        self.window.attributes("-topmost", True)
-        self.text_widget = scrolledtext.ScrolledText(self.window, bg="black", fg="lime", font=("Courier", 10))
-        self.text_widget.pack(fill=BOTH, expand=True)
+    def log(self, message, level="info"):
+        prefix = {"info": "[INFO]", "error": "[ERROR]"}.get(level, "[INFO]")
+        text = f"{prefix} {message}\n"
 
-    def log(self, message):
-        logging.info(message)
         if self.text_widget:
-            self.text_widget.insert("end", message + "\n")
-            self.text_widget.see("end")
+            self.text_widget.insert(tk.END, text)
+            self.text_widget.see(tk.END)
+
+        try:
+            with open(self.log_path, 'a', encoding='utf-8') as f:
+                f.write(text)
+        except Exception:
+            pass
