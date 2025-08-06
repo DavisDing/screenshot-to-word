@@ -10,7 +10,8 @@ APP_TITLE = "测试工具 - V1.0.0 作者: Haoding"
 class DesktopTestToolApp:
     def __init__(self):
         import os
-        os.chdir(get_base_path())  # 设置工作目录为exe同级路径，确保所有相对路径正确
+        self.base_path = get_base_path()
+        os.chdir(self.base_path)  # 设置工作目录为exe同级路径，确保所有相对路径正确
 
         self.root = tk.Tk()
         self.root.title(APP_TITLE)
@@ -20,7 +21,6 @@ class DesktopTestToolApp:
         self.logger = Logger(self.root)
 
         try:
-            self.base_path = get_base_path(self.logger)
             ensure_directories(self.base_path, self.logger)
         except Exception as e:
             self.logger.log(f"初始化目录异常：{e}")
