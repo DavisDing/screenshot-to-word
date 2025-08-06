@@ -18,7 +18,7 @@ class TestRunner:
         self.word_output_dir = word_output_dir
         self.temp_dir = temp_dir
 
-        self.word_generator = WordGenerator(word_output_dir)
+        self.word_generator = WordGenerator(word_output_dir, self.logger)
         self.control_panel = None
 
         self.current_case_index = 0
