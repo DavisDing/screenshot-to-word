@@ -27,7 +27,7 @@ class TestRunner:
 
         for idx, row in cases.iterrows():
             self.current_index = idx
-            filename = row['文件名']
+            filename = row['测试名称']
             checkpoint = row['验证点']
             self.logger.log(f"执行用例：{filename} - {checkpoint}")
             self.control_panel.update_case(filename, checkpoint)
@@ -42,7 +42,7 @@ class TestRunner:
 
     def on_screenshot(self):
         row = self.excel_handler.df.loc[self.current_index]
-        filename = row['文件名']
+        filename = row['测试名称']
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         image_path = os.path.join("word_output", filename, f"{filename}_{timestamp}.png")
         os.makedirs(os.path.dirname(image_path), exist_ok=True)
