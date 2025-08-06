@@ -1,7 +1,9 @@
 import os
+import sys
 import pandas as pd
 from openpyxl import load_workbook
 from tkinter import messagebox
+from tkinter import filedialog
 
 class ExcelHandler:
     def __init__(self, logger=None):
@@ -12,21 +14,29 @@ class ExcelHandler:
         self.sheet_name = None
 
     def select_excel_file(self):
-        files = [f for f in os.listdir('excel_input') if f.endswith('.xlsx') or f.endswith('.xls')]
+        base_dir = os.path.dirname(os.path.abspath(sys.executable)) if getattr(sys, 'frozen', False) else os.getcwd()
+        input_dir = os.path.join(base_dir, "excel_input")
+        files = [f for f in os.listdir(input_dir) if f.endswith('.xlsx') or f.endswith('.xls')]
         if not files:
             if self.logger:
-                self.logger.log("未找到 Excel 文件")
-            messagebox.showwarning("提示", "excel_input目录中未找到任何Excel文件！")
+                self.logger.log("excel_input 目录中未找到 Excel 文件，准备进入手动选择")
+            messagebox.showwarning("提示", "excel_input 目录中未找到任何 Excel 文件，是否手动选择？")
+            manual_path = filedialog.askopenfilename(title="选择Excel文件", filetypes=[("Excel files", "*.xlsx *.xls")])
+            if manual_path:
+                self.file_path = manual_path
+                if self.logger:
+                    self.logger.log(f"手动选中Excel文件: {self.file_path}")
+                return self.file_path
             return None
         if len(files) == 1:
-            self.file_path = os.path.join('excel_input', files[0])
+            self.file_path = os.path.join(input_dir, files[0])
         else:
             from tkinter import simpledialog
             choice = simpledialog.askstring("选择文件", f"请选择文件，输入编号：\n" +
                                          '\n'.join([f'{i+1}. {fn}' for i, fn in enumerate(files)]))
             try:
                 idx = int(choice) - 1
-                self.file_path = os.path.join('excel_input', files[idx])
+                self.file_path = os.path.join(input_dir, files[idx])
             except Exception:
                 messagebox.showerror("错误", "文件选择无效！")
                 return None
@@ -85,4 +95,3 @@ class ExcelHandler:
         except Exception as e:
             if self.logger:
                 self.logger.log(f"更新Excel异常: {e}")
-
