@@ -18,8 +18,8 @@ class TestRunner:
 
     def run(self):
         cases = self.excel_handler.load_cases()
-        if not cases:
-            messagebox.showinfo("提示", "未发现可执行的用例")
+        if cases is None or cases.empty:
+            self.logger.log("无有效用例可执行", level="error")
             return
 
         self.control_panel = ControlPanel(self.on_screenshot, self.on_skip, self.on_exit)

@@ -25,8 +25,8 @@ class ExcelHandler:
 
         try:
             df = pd.read_excel(self.filepath)
-            if not {'文件名', '验证点', '执行结果'}.issubset(df.columns):
-                self.logger.log("Excel 缺少必要列：文件名、验证点、执行结果", level="error")
+            if not {'测试名称', '验证点', '执行结果'}.issubset(df.columns):
+                self.logger.log("Excel 缺少必要列：测试名称、验证点、执行结果", level="error")
                 return None
 
             df = df[~df['执行结果'].astype(str).str.lower().isin(['pass', 'passed', '已执行'])].copy()
