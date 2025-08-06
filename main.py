@@ -6,6 +6,9 @@ from utils.excel_handler import ExcelHandler
 from utils.logger import Logger
 from ui.control_panel import ControlPanel
 from core.test_runner import TestRunner
+import sys
+if getattr(sys, 'frozen', False):
+    os.chdir(os.path.dirname(sys.executable))
 
 class App:
     def __init__(self, root):
@@ -27,6 +30,15 @@ class App:
         self.exit_button.pack(pady=5)
 
     def start_execution(self):
+        if not os.path.exists("logs"):
+            os.makedirs("logs")
+        if not os.path.exists("word_output"):
+            os.makedirs("word_output")
+        if not os.path.exists("excel_input"):
+            os.makedirs("excel_input")
+            messagebox.showinfo("提示", "未找到 excel_input 文件夹，已自动创建。请将 Excel 文件放入该目录后重新运行。")
+            self.root.deiconify()
+            return
         self.root.withdraw()
         self.status_label.config(text="执行中...")
         cases = self.excel_handler.load_cases()
