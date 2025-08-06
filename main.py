@@ -1,84 +1,55 @@
-import os
-import sys
 import threading
 import tkinter as tk
-from tkinter import messagebox
-from tkinter import ttk
-
+from utils.path_utils import get_base_path, ensure_directories
 from utils.logger import Logger
 from utils.excel_handler import ExcelHandler
 from core.test_runner import TestRunner
 
-BG_COLOR = "#282c34"
-FG_COLOR = "#abb2bf"
-BTN_BG = "#61afef"
-BTN_FG = "#282c34"
-FONT = ("Segoe UI", 11)
+APP_TITLE = "测试工具 - V1.0.0 作者: Haoding"
 
-def get_base_dir():
-    if getattr(sys, 'frozen', False):
-        return os.path.dirname(sys.executable)
-    return os.path.dirname(os.path.abspath(__file__))
+class DesktopTestToolApp:
+    def __init__(self):
+        self.root = tk.Tk()
+        self.root.title(APP_TITLE)
+        self.root.geometry("400x200")
+        self.root.resizable(False, False)
 
-BASE_DIR = get_base_dir()
-EXCEL_DIR = os.path.join(BASE_DIR, "excel_input")
-WORD_OUTPUT_DIR = os.path.join(BASE_DIR, "word_output")
-LOG_DIR = os.path.join(BASE_DIR, "logs")
-TEMP_DIR = os.path.join(BASE_DIR, "Temp")
+        self.logger = Logger(self.root)
 
-for d in [EXCEL_DIR, WORD_OUTPUT_DIR, LOG_DIR, TEMP_DIR]:
-    os.makedirs(d, exist_ok=True)
+        try:
+            self.base_path = get_base_path(self.logger)
+            ensure_directories(self.base_path, self.logger)
+        except Exception as e:
+            self.logger.log(f"初始化目录异常：{e}")
 
-class App:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("桌面自动化测试工具")
-        self.root.geometry("700x500")
-        self.root.configure(bg=BG_COLOR)
+        self.excel_handler = ExcelHandler(self.logger, input_dir=self.base_path + "/excel_input", root=self.root)
+        self.test_runner = TestRunner(self.logger, self.excel_handler, self.root)
 
-        style = ttk.Style(root)
-        style.theme_use('clam')
-        style.configure('TButton', background=BTN_BG, foreground=BTN_FG, font=FONT)
-        style.map('TButton',
-                  background=[('active', '#528bff')],
-                  foreground=[('active', '#ffffff')])
+        self.create_main_ui()
+        self.logger.log("程序启动，界面加载完成")
 
-        self.logger = Logger(LOG_DIR)
-        self.logger.init_ui(self.root)
+    def create_main_ui(self):
+        tk.Label(self.root, text=APP_TITLE, font=("Arial", 16)).pack(pady=10)
 
-        # 修改ExcelHandler初始化方式，只传递需要的参数
-        self.excel_handler = ExcelHandler(excel_dir=EXCEL_DIR, logger=self.logger)
-        self.test_runner = TestRunner(
-            root=self.root,
-            excel_handler=self.excel_handler,
-            logger=self.logger,
-            word_output_dir=WORD_OUTPUT_DIR,
-            temp_dir=TEMP_DIR
-        )
+        start_btn = tk.Button(self.root, text="开始执行", width=20, command=self.on_start)
+        start_btn.pack(pady=5)
 
-        btn_frame = ttk.Frame(root)
-        btn_frame.pack(pady=10, fill='x', padx=20)
+        exit_btn = tk.Button(self.root, text="退出", width=20, command=self.on_exit)
+        exit_btn.pack(pady=5)
 
-        self.start_btn = ttk.Button(btn_frame, text="开始执行", command=self.start_test)
-        self.start_btn.pack(side="left", padx=10, ipadx=15, ipady=5)
-
-        self.exit_btn = ttk.Button(btn_frame, text="退出", command=self.on_exit)
-        self.exit_btn.pack(side="left", padx=10, ipadx=15, ipady=5)
-
-    def start_test(self):
-        if not self.excel_handler.load_excel():
-            return
-        self.start_btn.config(state=tk.DISABLED)
-        threading.Thread(target=self.test_runner.run, daemon=True).start()
+    def on_start(self):
+        self.logger.log("点击开始执行按钮")
+        thread = threading.Thread(target=self.test_runner.run_tests)
+        thread.daemon = True
+        thread.start()
 
     def on_exit(self):
-        if messagebox.askokcancel("退出确认", "确定退出程序？"):
-            self.root.destroy()
+        self.logger.log("点击退出按钮，程序结束")
+        self.root.quit()
 
-def main():
-    root = tk.Tk()
-    app = App(root)
-    root.mainloop()
+    def run(self):
+        self.root.mainloop()
 
 if __name__ == "__main__":
-    main()
+    app = DesktopTestToolApp()
+    app.run()
