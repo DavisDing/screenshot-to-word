@@ -4,12 +4,13 @@ import os
 from docx import Document
 from docx.shared import Inches
 from tkinter import messagebox
+from utils.path_utils import get_base_path
 
 class WordGenerator:
     def __init__(self, logger, root):
         self.logger = logger
         self.root = root
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        base_dir = get_base_path()
         self.output_dir = os.path.join(base_dir, "word_output")
         os.makedirs(self.output_dir, exist_ok=True)
 

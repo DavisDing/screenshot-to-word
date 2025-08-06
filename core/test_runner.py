@@ -34,7 +34,8 @@ class TestRunner:
 
             from ui.control_panel import ControlPanel
             self.control_panel = ControlPanel(self.logger, self.pending_cases, self.excel_handler, self.root)
-            self.control_panel.show()
+            self.control_panel.deiconify()
+            self.control_panel.grab_set()
         except Exception as e:
             self.logger.log(f"测试运行异常：{e}")
             self.root.attributes('-topmost', True)

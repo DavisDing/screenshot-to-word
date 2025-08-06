@@ -53,7 +53,7 @@ class ExcelHandler:
 
     def load_excel(self) -> bool:
         try:
-            self.df = pd.read_excel(self.file_path, header=None)
+            self.df = pd.read_excel(self.file_path, header=0)
             self.logger.log(f"成功加载Excel文件：{os.path.basename(self.file_path)}")
         except Exception as e:
             self._show_error(f"读取Excel失败：{e}")
@@ -70,15 +70,15 @@ class ExcelHandler:
     def get_pending_cases(self):
         self.logger.log("开始获取未执行用例")
         for idx, row in self.df.iterrows():
-            status = str(row[2]).strip().lower() if pd.notna(row[2]) else ''
+            status = str(row['执行结果']).strip().lower() if pd.notna(row['执行结果']) else ''
             if status not in ['已执行', 'pass', 'passed']:
-                filename = str(row[0]).strip() if pd.notna(row[0]) else ''
-                checkpoint = str(row[1]).strip() if pd.notna(row[1]) else ''
+                filename = str(row['用例文件名']).strip() if pd.notna(row['用例文件名']) else ''
+                checkpoint = str(row['验证点']).strip() if pd.notna(row['验证点']) else ''
                 self.logger.log(f"待执行用例: 行={idx}, 用例名={filename}, 验证点={checkpoint}")
                 yield idx, filename, checkpoint
 
     def mark_case_executed(self, index: int):
-        self.df.at[index, 2] = "已执行"
+        self.df.at[index, '执行结果'] = "已执行"
         try:
             self.df.to_excel(self.file_path, index=False, header=False)
             self.logger.log(f"更新用例行 {index} 状态为 已执行")

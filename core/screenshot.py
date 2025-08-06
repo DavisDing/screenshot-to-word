@@ -6,12 +6,14 @@ import pyautogui
 import threading
 from ui.annotator import Annotator
 import tkinter as tk
+from utils.path_utils import get_base_path
+
 
 class ScreenshotTool:
     def __init__(self, logger, root):
         self.logger = logger
         self.root = root
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        base_dir = get_base_path()
         self.temp_dir = os.path.join(base_dir, "Temp")
         os.makedirs(self.temp_dir, exist_ok=True)
 

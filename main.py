@@ -9,6 +9,9 @@ APP_TITLE = "测试工具 - V1.0.0 作者: Haoding"
 
 class DesktopTestToolApp:
     def __init__(self):
+        import os
+        os.chdir(get_base_path())  # 设置工作目录为exe同级路径，确保所有相对路径正确
+
         self.root = tk.Tk()
         self.root.title(APP_TITLE)
         self.root.geometry("400x200")
