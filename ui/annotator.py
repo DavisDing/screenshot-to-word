@@ -30,7 +30,9 @@ class Annotator:
         self.canvas.bind('<ButtonRelease-1>', self.on_left_up)
         self.canvas.bind('<Button-3>', self.on_right_click)
         self.root.bind('<Escape>', self.on_escape)
-        tk.Button(self.root, text="✅ 保存退出", command=self.save_and_close).pack(pady=8)
+        btn = tk.Button(self.root, text="✅ 保存退出", command=self.save_and_close)
+        btn.place(x=self.image.width - 130, y=20)
+        btn.lift()  # 悬浮于图像之上
 
     def on_left_down(self, event):
         self.start_x = event.x

@@ -23,13 +23,14 @@ class ControlPanel:
         btn_frame.pack(pady=10)
 
         tk.Button(btn_frame, text="截图(F8)", command=self.trigger_screenshot, width=10).grid(row=0, column=0, padx=5)
+        tk.Button(btn_frame, text="完成", command=self.trigger_done, width=10).grid(row=0, column=3, padx=5)
         tk.Button(btn_frame, text="跳过", command=self.trigger_skip, width=10).grid(row=0, column=1, padx=5)
         tk.Button(btn_frame, text="退出", command=self.trigger_exit, width=10).grid(row=0, column=2, padx=5)
 
         keyboard.add_hotkey('F8', self.trigger_screenshot)
 
-    def update_case(self, case, checkpoint):
-        self.label_case.config(text=f"用例：{case}")
+    def update_case(self, filename, checkpoint, progress_text=""):
+        self.label_case.config(text=f"用例：{filename}  [{progress_text}]")
         self.label_checkpoint.config(text=f"验证点：{checkpoint}")
 
     def trigger_screenshot(self):
@@ -47,6 +48,9 @@ class ControlPanel:
     def wait_for_action(self):
         self.event.clear()
         self.event.wait()
+
+    def trigger_done(self):
+        self.event.set()
 
     def reset_action(self):
         self.event.set()

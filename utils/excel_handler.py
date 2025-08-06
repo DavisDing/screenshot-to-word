@@ -59,3 +59,5 @@ class ExcelHandler:
             self.logger.log("Excel 文件正在使用中，无法写入", level="error")
         except Exception as e:
             self.logger.log(f"写入 Excel 异常：{e}", level="error")
+    def count_executed(self):
+        return self.df[self.df['执行结果'] == '已执行'].shape[0]
