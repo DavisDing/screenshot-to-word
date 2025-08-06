@@ -4,7 +4,7 @@ import os
 
 def launch_annotator(image_path):
     Annotator(image_path).run()
-    return image_path
+    return image_path.replace(".png", "_marked.png")
 
 class Annotator:
     def __init__(self, image_path):
@@ -30,6 +30,7 @@ class Annotator:
         self.canvas.bind('<ButtonRelease-1>', self.on_left_up)
         self.canvas.bind('<Button-3>', self.on_right_click)
         self.root.bind('<Escape>', self.on_escape)
+        tk.Button(self.root, text="✅ 保存退出", command=self.save_and_close).pack(pady=8)
 
     def on_left_down(self, event):
         self.start_x = event.x
@@ -73,7 +74,8 @@ class Annotator:
         self.canvas.create_image(0, 0, anchor='nw', image=self.tk_image)
 
     def save_and_close(self):
-        self.image.save(self.image_path)
+        save_path = self.image_path.replace(".png", "_marked.png")
+        self.image.save(save_path)
         self.root.destroy()
 
     def run(self):

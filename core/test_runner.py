@@ -23,14 +23,16 @@ class TestRunner:
             return
 
         self.control_panel = ControlPanel(self.on_screenshot, self.on_skip, self.on_exit)
-        self.logger.log(f"加载 {len(cases)} 条用例，开始执行...\n")
+        total = len(cases)
+        self.logger.log(f"加载 {total} 条用例，开始执行...\n")
 
-        for idx, row in cases.iterrows():
+        for i, (idx, row) in enumerate(cases.iterrows()):
             self.current_index = idx
             filename = row['测试名称']
             checkpoint = row['验证点']
+            progress_text = f"{i + 1}/{total}"
             self.logger.log(f"执行用例：{filename} - {checkpoint}")
-            self.control_panel.update_case(filename, checkpoint)
+            self.control_panel.update_case(filename, checkpoint, progress_text)
             self.control_panel.wait_for_action()
 
             if self.stop_flag.is_set():
@@ -48,8 +50,8 @@ class TestRunner:
         os.makedirs(os.path.dirname(image_path), exist_ok=True)
         take_screenshot(image_path)
 
-        edited_image = launch_annotator(image_path)
-        self.insert_to_word(filename, row['验证点'], edited_image)
+        marked_path = launch_annotator(image_path)
+        self.insert_to_word(filename, row['验证点'], marked_path)
         self.excel_handler.mark_as_executed(self.current_index)
         self.control_panel.reset_action()
 
