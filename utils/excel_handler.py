@@ -80,8 +80,9 @@ class ExcelHandler:
     def mark_case_executed(self, index: int):
         self.df.at[index, '执行结果'] = "已执行"
         try:
-            self.df.to_excel(self.file_path, index=False, header=False)
-            self.logger.log(f"更新用例行 {index} 状态为 已执行")
+            # 保留表头写回Excel，index=False不写入索引
+            self.df.to_excel(self.file_path, index=False, header=True)
+            self.logger.log(f"更新用例行 {index + 2} 状态为 已执行")
         except PermissionError:
             self._show_error("写入Excel失败，文件被占用或无权限。请关闭Excel后重试。")
             self.logger.log("写入Excel失败，权限不足或文件被占用。")
