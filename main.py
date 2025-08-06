@@ -3,13 +3,20 @@ import sys
 import threading
 import tkinter as tk
 from tkinter import messagebox
+from tkinter import ttk
+from tkinter.scrolledtext import ScrolledText
 
 from utils.logger import Logger
 from utils.excel_handler import ExcelHandler
 from core.test_runner import TestRunner
 
+BG_COLOR = "#282c34"
+FG_COLOR = "#abb2bf"
+BTN_BG = "#61afef"
+BTN_FG = "#282c34"
+FONT = ("Segoe UI", 11)
+
 def get_base_dir():
-    # 运行时获取exe所在目录，打包后生效
     if getattr(sys, 'frozen', False):
         return os.path.dirname(sys.executable)
     return os.path.dirname(os.path.abspath(__file__))
@@ -26,10 +33,20 @@ for d in [EXCEL_DIR, WORD_OUTPUT_DIR, LOG_DIR, TEMP_DIR]:
 class App:
     def __init__(self, root):
         self.root = root
-        self.root.title("测试截图小工具")
+        self.root.title("测试截图小工具 - v1.0 作者：Haoding")
         self.root.geometry("700x500")
+        self.root.configure(bg=BG_COLOR)
 
+        style = ttk.Style(root)
+        style.theme_use('clam')
+        style.configure('TButton', background=BTN_BG, foreground=BTN_FG, font=FONT)
+        style.map('TButton',
+                  background=[('active', '#528bff')],
+                  foreground=[('active', '#ffffff')])
+
+        # 日志框区域
         self.logger = Logger(LOG_DIR)
+        # 绑定滚动文本框到root
         self.logger.init_ui(self.root)
 
         self.excel_handler = ExcelHandler(EXCEL_DIR, self.logger)
@@ -41,17 +58,14 @@ class App:
             temp_dir=TEMP_DIR
         )
 
-        btn_frame = tk.Frame(self.root)
-        btn_frame.pack(pady=10)
+        btn_frame = ttk.Frame(root)
+        btn_frame.pack(pady=10, fill='x', padx=20)
 
-        self.start_btn = tk.Button(btn_frame, text="开始执行", width=15, height=2, command=self.start_test)
-        self.start_btn.pack(side="left", padx=10)
+        self.start_btn = ttk.Button(btn_frame, text="开始执行", command=self.start_test)
+        self.start_btn.pack(side="left", padx=10, ipadx=15, ipady=5)
 
-        self.exit_btn = tk.Button(btn_frame, text="退出", width=15, height=2, command=self.on_exit)
-        self.exit_btn.pack(side="left", padx=10)
-
-        self.root.bind('<Control-s>', lambda event: self.start_test())
-        self.root.bind('<Control-q>', lambda event: self.on_exit())
+        self.exit_btn = ttk.Button(btn_frame, text="退出", command=self.on_exit)
+        self.exit_btn.pack(side="left", padx=10, ipadx=15, ipady=5)
 
     def start_test(self):
         self.start_btn.config(state=tk.DISABLED)
