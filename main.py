@@ -5,7 +5,7 @@ from utils.logger import Logger
 from utils.excel_handler import ExcelHandler
 from core.test_runner import TestRunner
 
-APP_TITLE = "测试工具 - V1.0.0 作者: Haoding"
+APP_TITLE = "测试工具 - V1.0.0 作者: DingHao"
 
 class DesktopTestToolApp:
     def __init__(self):

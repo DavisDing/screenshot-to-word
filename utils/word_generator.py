@@ -18,9 +18,8 @@ class WordGenerator:
         """
         新建或追加Word文档，插入用例名、验证点、图片
         """
-        case_dir = os.path.join(self.output_dir, case_name)
-        os.makedirs(case_dir, exist_ok=True)
-        doc_path = os.path.join(case_dir, f"{case_name}.docx")
+
+        doc_path = os.path.join(self.output_dir, f"{case_name}.docx")
 
         if os.path.exists(doc_path):
             try:
