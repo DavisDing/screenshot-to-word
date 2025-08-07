@@ -111,6 +111,7 @@ class Annotator(tk.Toplevel):
                 self.tk_image = ImageTk.PhotoImage(self.draw_image)
                 self.canvas.config(width=self.tk_image.width(), height=self.tk_image.height())
                 self.canvas_image = self.canvas.create_image(0, 0, anchor="nw", image=self.tk_image)
+                self.canvas.image = self.tk_image  # 添加此行，强引用，避免被回收
 
             self.after(0, display_image)  # 确保在主循环中执行图像显示
         except Exception as e:
