@@ -1,5 +1,6 @@
 import threading
 import tkinter as tk
+import webbrowser
 from utils.path_utils import get_base_path, ensure_directories
 from utils.logger import Logger
 from utils.excel_handler import ExcelHandler
@@ -33,6 +34,9 @@ class DesktopTestToolApp:
 
     def create_main_ui(self):
         tk.Label(self.root, text=APP_TITLE, font=("Arial", 16), wraplength=380, justify="left").pack(pady=10, fill="x")
+        link = tk.Label(self.root, text="GitHub", fg="blue", cursor="hand2", font=("Arial", 10))
+        link.pack(pady=0)
+        link.bind("<Button-1>", lambda e: webbrowser.open_new("https://github.com/DavisDing/screenshot-to-word"))
 
         start_btn = tk.Button(self.root, text="开始执行", width=20, command=self.on_start)
         start_btn.pack(pady=5, fill="x")
