@@ -1,4 +1,5 @@
 import pandas as pd
+from openpyxl import load_workbook
 import os
 from tkinter import filedialog, messagebox
 
@@ -80,9 +81,12 @@ class ExcelHandler:
     def mark_case_executed(self, index: int):
         self.df.at[index, '执行结果'] = "已执行"
         try:
-            # 保留表头写回Excel，index=False不写入索引
-            self.df.to_excel(self.file_path, index=False, header=True)
-            self.logger.log(f"更新用例行 {index + 2} 状态为 已执行")
+            excel_row = index + 2  # 考虑到 DataFrame 第一行为表头
+            wb = load_workbook(self.file_path)
+            ws = wb.active
+            ws.cell(row=excel_row, column=3).value = "已执行"
+            wb.save(self.file_path)
+            self.logger.log(f"更新用例行 {excel_row} 状态为 已执行")
         except PermissionError:
             self._show_error("写入Excel失败，文件被占用或无权限。请关闭Excel后重试。")
             self.logger.log("写入Excel失败，权限不足或文件被占用。")
