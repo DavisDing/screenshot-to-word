@@ -13,6 +13,7 @@ class Annotator(tk.Toplevel):
         self.title("截图标注")
         self.attributes("-topmost", True)
         self.protocol("WM_DELETE_WINDOW", self.on_close)
+        self.resizable(True, True)
 
         # 载入图片
         self.original_image = Image.open(self.image_path).convert("RGBA")
@@ -20,7 +21,7 @@ class Annotator(tk.Toplevel):
         self.tk_image = ImageTk.PhotoImage(self.draw_image)
 
         self.canvas = tk.Canvas(self, width=self.tk_image.width(), height=self.tk_image.height(), cursor="cross")
-        self.canvas.pack()
+        self.canvas.pack(fill="both", expand=True)
 
         self.canvas_image = self.canvas.create_image(0, 0, anchor="nw", image=self.tk_image)
 
@@ -59,30 +60,20 @@ class Annotator(tk.Toplevel):
                 # 太小，视为无效，删除
                 self.canvas.delete(self.current_circle)
             else:
-                self.shapes.append(('circle', coords))
+                self.shapes.append(('circle', coords, self.current_circle))
             self.current_circle = None
 
     def on_right_click(self, event):
         text = simpledialog.askstring("输入文本", "请输入标注文字：", parent=self)
         if text:
             item = self.canvas.create_text(event.x, event.y, text=text, fill="blue", font=("Arial", 14))
-            self.shapes.append(('text', (event.x, event.y, text)))
+            self.shapes.append(('text', (event.x, event.y, text), item))
 
     def on_undo(self, event=None):
         if not self.shapes:
             return
         last = self.shapes.pop()
-        # 删除画布上对应对象
-        self.canvas.delete("all")
-        # 重新绘制所有剩余标注
-        self.tk_image = ImageTk.PhotoImage(self.draw_image)
-        self.canvas_image = self.canvas.create_image(0, 0, anchor="nw", image=self.tk_image)
-        for shape in self.shapes:
-            if shape[0] == 'circle':
-                self.canvas.create_oval(*shape[1], outline="red", width=2)
-            elif shape[0] == 'text':
-                x, y, text = shape[1]
-                self.canvas.create_text(x, y, text=text, fill="blue", font=("Arial", 14))
+        self.canvas.delete(last[2])
 
     def on_save(self, event=None):
         # 生成最终图像，叠加标注
