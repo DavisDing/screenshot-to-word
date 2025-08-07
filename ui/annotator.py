@@ -7,6 +7,10 @@ import os
 
 class Annotator(tk.Toplevel):
     def __init__(self, root, image_path):
+        # 确保存在默认 root（防止 ImageTk 报错）
+        if not tk._default_root:
+            _default_root = tk.Tk()
+            _default_root.withdraw()
         super().__init__(root)
         self.root = root
         self.image_path = image_path
