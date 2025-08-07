@@ -16,7 +16,7 @@ class ControlPanel(tk.Toplevel):
         self.root = root
 
         self.title("控制面板")
-        self.geometry("400x200")
+        self.geometry("450x300")
         self.attributes("-topmost", True)
         self.protocol("WM_DELETE_WINDOW", self.on_exit)
         self.resizable(True, True)

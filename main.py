@@ -16,7 +16,7 @@ class DesktopTestToolApp:
 
         self.root = tk.Tk()
         self.root.title(APP_TITLE)
-        self.root.geometry("400x200")
+        self.root.geometry("450x400")
         self.root.resizable(True, True)
 
         self.logger = Logger(self.root)
@@ -34,13 +34,16 @@ class DesktopTestToolApp:
 
     def create_main_ui(self):
 
-        start_btn = tk.Button(self.root, text="开始执行", width=20, command=self.on_start)
-        start_btn.pack(pady=5, fill="x")
+        btn_frame = tk.Frame(self.root)
+        btn_frame.pack(pady=5)
 
-        exit_btn = tk.Button(self.root, text="退出", width=20, command=self.on_exit)
-        exit_btn.pack(pady=5, fill="x")
+        start_btn = tk.Button(btn_frame, text="开始执行", width=15, command=self.on_start)
+        start_btn.pack(side="left", padx=10)
+
+        exit_btn = tk.Button(btn_frame, text="退出", width=15, command=self.on_exit)
+        exit_btn.pack(side="left", padx=10)
         
-        tk.Label(self.root, text=APP_TITLE, font=("Arial", 16), wraplength=380, justify="left").pack(pady=10, fill="x")
+        tk.Label(self.root, text=APP_TITLE, font=("Arial", 10), wraplength=380, justify="left").pack(pady=10, fill="x")
 
         link = tk.Label(self.root, text="GitHub", fg="blue", cursor="hand2", font=("Arial", 10))
         link.pack(pady=0)
