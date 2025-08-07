@@ -1,58 +1,126 @@
-以下是为该桌面自动化测试工具编写的完整 README.md 文件，适合用于开源发布、协作开发或内部交付：
-
-⸻
 
 
-# 桌面自动化测试工具（DesktopTestTool）
+# SCREENSHOT-TO-WORD
 
 ## 🧭 工具简介
 
-本工具旨在提升手工测试效率，适用于在执行测试用例时快速截图、标注、记录验证点，并生成带图文说明的 Word 报告。适配 Windows 操作系统，可打包为 `.exe` 独立运行。
+SCREENSHOT-TO-WORD 是一款专为测试人员设计的桌面自动化辅助工具，能够根据 Excel 用例逐条执行截图、图形标注，并自动生成图文并茂的 Word 测试报告。支持基础版与步骤版 Excel 模式，适配手工测试记录场景，配套快捷键和控制面板，显著提升执行效率。
 
 ---
 
-## ✨ 功能特点
+## 🧩 设计思路
 
-- ✅ 读取指定目录的测试用例 Excel 文件（测试名称、验证点、执行状态）
-- ✏️ 截图并支持画圈、加文字标注
-- 📄 自动生成图文并茂的 Word 报告
-- ✅ 每执行一条用例即自动更新 Excel 状态列
-- ⚡ 快捷键 F8 或按钮操作
-- 💡 支持跳过、退出操作
-- 📋 自动日志记录，保留执行历史
+该工具面向桌面测试场景，核心目标是将测试人员执行用例过程中所需的“截图标注 + Word记录 + Excel追踪”一体化，通过自动化减少重复操作，提高效率。整体设计思路如下：
+
+### 🎯 功能定位
+- 支持两类用例格式（基础版与步骤版），满足不同测试粒度
+- 提供可视化控制面板，便于交互控制、信息展示和状态跟踪
+- 提供快捷键操作以适配高频测试操作场景（如边测边截）
+
+### 🔄 核心流程
+1. 读取 Excel 用例（按格式自动识别基础/步骤模式）
+2. 提取当前用例或步骤的验证点、描述等信息，展示在控制面板
+3. 启动截图标注界面，用户可自由画圈、输入说明、撤销等操作
+4. 截图完成后按规则命名保存，并插入至 Word 报告中（按用例名生成或追加）
+5. 执行完毕自动更新 Excel 为“已执行”，并进入下一条/步骤
+
+### 🧱 模块划分
+- `main.py`：启动主程序与控制入口
+- `ui/`：负责 UI 控制界面（control_panel）和标注界面（annotator）
+- `core/`：驱动逻辑，包括截图控制、任务流程执行等
+- `utils/`：封装了 Excel 操作、日志记录、路径处理、Word 插图等功能模块
+- `excel_input/` 与 `word_output/`：作为标准输入输出目录，隔离操作
+- `logs/`：记录运行信息，便于排查问题
+
+### 📦 可部署性
+- 依赖 Python 标准库和主流第三方库（如 `pandas`、`openpyxl`、`python-docx`、`pyautogui`、`tkinter` 等）
+- 支持 Windows 上使用 `pyinstaller` 一键打包为独立 EXE 文件，方便交付与部署
+
+### 💡 拓展性设计
+- 用例格式可扩展为更多字段（如截图数量控制、自动重试等）
+- 后续支持导出为 PDF、自动上传、截图压缩等增强功能
+- 与测试管理平台（如 TestLink/Jira）联动可作为插件嵌入使用
+
+---
+
+## ✨ 功能亮点
+
+- ✅ 读取 Excel 测试用例（支持基础版与步骤版格式）
+- ✏️ 鼠标截图后支持画圈、写字、撤销
+- 📄 自动插图至对应 Word 文件，支持多图编号
+- ⌨️ 快捷键触发（如 F8 一键截图）
+- 🧭 控制面板展示当前验证点、步骤名和步骤描述
+- 🪄 自动生成 Word 报告，不存在则新建
+- 🔄 Excel 自动更新执行状态，标记“已执行”
+- 📂 支持多项目切换（通过自定义 Excel 路径）
+- 🧱 结构清晰、可打包为 `.exe` 独立部署
 
 ---
 
 ## 📁 项目结构
 
-DesktopTestTool/
-├── main.py                 # 启动入口，主窗口逻辑
+```
+SCREENSHOT-TO-WORD/
+├── .github/workflows/
+│   └── build.yml
 ├── core/
-│   ├── test_runner.py      # 执行控制流程
-│   └── screenshot.py       # 截图模块（pyautogui）
+│   ├── screenshot.py         # 截图与图像标注核心逻辑
+│   └── test_runner.py        # 用例驱动器与主执行流程
+├── excel_input/
+│   ├── 步骤版.xlsx             # 示例步骤版用例
+│   └── 基础版.xlsx             # 示例基础版用例
+├── logs/
+│   ├── .gitkeep
+│   └── output.log            # 日志输出
 ├── ui/
-│   ├── control_panel.py    # 控制面板 UI（置顶 + 快捷操作）
-│   └── annotator.py        # 图像标注界面
+│   ├── annotator.py          # 截图标注界面
+│   └── control_panel.py      # 测试控制面板界面
 ├── utils/
-│   ├── excel_handler.py    # Excel 文件读写处理
-│   └── logger.py           # 日志记录器
-├── excel_input/            # 运行时读取的用例 Excel 文件
-├── word_output/            # 输出 Word 文档目录
-├── logs/                   # 日志文件目录
-├── requirements.txt        # 第三方依赖列表
-└── README.md               # 工具说明文档
+│   ├── excel_handler.py      # Excel 读取、写入
+│   ├── logger.py             # 日志记录封装
+│   ├── path_utils.py         # 路径处理工具
+│   └── word_generator.py     # Word 操作逻辑
+├── word_output/
+│   └── .gitkeep              # Word 报告输出目录
+├── main.py                   # 程序入口
+├── ReadMe.MD                 # 当前说明文档
+└── requirements.txt          # 所需依赖
+```
 
 ---
 
-## ✅ Excel 文件格式说明
+## 📊 Excel 格式支持
 
-| 文件名 | 验证点 | 执行结果 |
+### ✅ 基础版（3 列）
+
+| 用例名 | 验证点 | 执行结果 |
 |--------|--------|----------|
-| Login  | 登录成功后跳转首页 | (留空或非“已执行/PASS”) |
-| ...    | ...    | ...      |
+| 登录页 | 显示用户名输入框 | 空白 / Passed |
 
-- 工具会自动跳过 **已执行、PASS、Passed** 的行
-- 每次截图后自动更新状态为“已执行”
+- 跳过“Passed”“已执行”等行
+- 执行时弹出验证点 + 启动截图
+- 插图并标记执行完成后自动更新为“已执行”
+
+### ✅ 步骤版（6 列）
+
+| 测试名称 | 验证点 | 步骤名称 | 步骤描述 | 预期结果 | 测试结果 |
+|----------|--------|----------|----------|----------|----------|
+| 登录功能 | 登录成功 | 打开登录页 | 点击登录按钮 | 显示首页 | 空白 |
+
+- 显示当前步骤名称与描述
+- 每一步截图 + 标注 + 确认后才能进入“下一步”
+- 全部步骤完成后方可点击“完成”
+- Word 报告中每图前加步骤信息
+
+---
+
+## 🎮 快捷键与操作说明
+
+- `F8`：启动截图 + 标注
+- `ESC`：退出标注，保存当前
+- `Enter` 或“下一步”：确认当前步骤
+- 自动创建截图文件夹，避免图片覆盖
+- Word 文件若存在则插图，不存在则新建
 
 ---
 
@@ -62,69 +130,29 @@ DesktopTestTool/
 
 ```bash
 pip install -r requirements.txt
+```
 
-2. 准备目录结构
+### 2. 运行主程序
 
-确保 main.py 所在目录下存在以下目录：
-
-excel_input/     # 放入 Excel 文件
-word_output/     # Word 报告输出目录
-logs/            # 自动生成执行日志
-
-3. 运行工具
-
+```bash
 python main.py
+```
 
-
-⸻
-
-💻 打包为 .exe（可选）
-
-需安装 pyinstaller：
-
-pip install pyinstaller
-pyinstaller main.py --onefile
-
-生成后的 dist/DesktopTestTool.exe 可独立运行，但需确保与以下文件夹同级：
-
-DesktopTestTool.exe
-├── excel_input/
-├── word_output/
-├── logs/
-
-
-⸻
-
-🧪 功能测试建议清单
-
-测试点	说明
-Excel 文件缺失	应弹窗提示
-Excel 列缺失	明确提示缺“文件名/验证点/执行结果”
-Excel 被打开中	写入失败时应给出提示
-Word 被打开中	插图失败不应中断程序
-ESC 退出标注	应保存标注或跳过
-多张截图	应正确编号保存，不覆盖
-F8 快捷键	与按钮响应一致
-
-
-⸻
-
-📌 依赖说明（requirements.txt）
-
-pandas
-openpyxl
-python-docx
-pyautogui
-keyboard
-Pillow
-
-
-⸻
-
-📞 联系与反馈
-
-如有功能建议或问题反馈，欢迎提交 Issue 或联系开发者。
+默认读取 `excel_input` 下的 Excel 文件。可在 UI 中更改路径。
 
 ---
 
-是否还需要 `.spec` 打包配置，或生成 GitHub Actions 自动构建？我可以继续补充。
+## 🔧 可选：打包为可执行文件（Windows）
+
+```bash
+pip install pyinstaller
+pyinstaller main.py --onefile
+```
+
+生成路径：`dist/DesktopTestTool.exe`。可独立部署运行。
+
+---
+
+## 📄 LICENSE
+
+本项目使用 MIT License 开源，欢迎反馈和改进建议。

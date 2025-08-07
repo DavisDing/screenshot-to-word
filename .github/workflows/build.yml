@@ -19,9 +19,15 @@ jobs:
         shell: pwsh
         run: |
           git fetch --tags
-          $latestTag = git describe --tags (git rev-list --tags --max-count=1)
-          echo "latestTag=$latestTag"
-          echo "latest=$latestTag" >> $env:GITHUB_OUTPUT
+          $tags = git tag
+          if ([string]::IsNullOrWhiteSpace($tags)) {
+            echo "No tags found."
+            echo "latest=" >> $env:GITHUB_OUTPUT
+          } else {
+            $latestTag = git describe --tags (git rev-list --tags --max-count=1)
+            echo "latestTag=$latestTag"
+            echo "latest=$latestTag" >> $env:GITHUB_OUTPUT
+          }
 
       - name: Calculate new tag
         id: new_tag
