@@ -43,27 +43,9 @@ class ControlPanel(tk.Toplevel):
         self.bind("<Configure>", self._on_resize)
 
     def create_widgets(self):
-        info_frame = tk.Frame(self)
-        info_frame.pack(pady=5, fill="both", expand=True)
-
-        def add_row(label_text, attr_name):
-            label = tk.Label(info_frame, text=label_text, anchor="w", font=("Arial", 10, "bold"))
-            label.grid(row=add_row.row_index, column=0, sticky="nw", padx=5, pady=2)
-            value_label = tk.Label(info_frame, text="", anchor="w", wraplength=360, justify="left")
-            value_label.grid(row=add_row.row_index, column=1, sticky="nw", padx=5, pady=2)
-            setattr(self, attr_name, value_label)
-            add_row.row_index += 1
-
-        add_row.row_index = 0
-        add_row("用例名：", "lbl_case_name")
-        add_row("验证点：", "lbl_checkpoint")
-        add_row("步骤名称：", "lbl_step_name")
-        add_row("步骤描述：", "lbl_step_desc")
-        add_row("预期结果：", "lbl_expected")
-        add_row("当前进度：", "lbl_progress")
-
+        # 按钮区域（顶部）
         btn_frame = tk.Frame(self)
-        btn_frame.pack(pady=10, fill="x", expand=True, anchor="center")
+        btn_frame.pack(pady=5, fill="x", expand=False, anchor="n")
 
         btn_frame.grid_columnconfigure(0, weight=1)
         btn_frame.grid_columnconfigure(1, weight=1)
@@ -82,6 +64,26 @@ class ControlPanel(tk.Toplevel):
 
         self.btn_next = tk.Button(btn_frame, text="下一步", command=self.on_next_step)
         self.btn_next.grid(row=0, column=3, padx=5)
+
+        # 信息显示区域（底部）
+        info_frame = tk.Frame(self)
+        info_frame.pack(pady=10, fill="both", expand=True)
+
+        def add_row(label_text, attr_name):
+            label = tk.Label(info_frame, text=label_text, anchor="w", font=("Arial", 10, "bold"))
+            label.grid(row=add_row.row_index, column=0, sticky="nw", padx=5, pady=2)
+            value_label = tk.Label(info_frame, text="", anchor="w", wraplength=360, justify="left")
+            value_label.grid(row=add_row.row_index, column=1, sticky="nw", padx=5, pady=2)
+            setattr(self, attr_name, value_label)
+            add_row.row_index += 1
+
+        add_row.row_index = 0
+        add_row("用例名：", "lbl_case_name")
+        add_row("验证点：", "lbl_checkpoint")
+        add_row("步骤名称：", "lbl_step_name")
+        add_row("步骤描述：", "lbl_step_desc")
+        add_row("预期结果：", "lbl_expected")
+        add_row("当前进度：", "lbl_progress")
 
     def load_case(self):
         if self.is_step_mode:
