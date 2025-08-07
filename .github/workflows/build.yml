@@ -16,26 +16,29 @@ jobs:
 
       - name: Get latest tag
         id: get_tag
+        shell: pwsh
         run: |
           git fetch --tags
-          latestTag=$(git describe --tags `git rev-list --tags --max-count=1`)
+          $latestTag = git describe --tags (git rev-list --tags --max-count=1)
           echo "latestTag=$latestTag"
-          echo "::set-output name=latest::$latestTag"
+          echo "latest=$latestTag" >> $env:GITHUB_OUTPUT
 
       - name: Calculate new tag
         id: new_tag
+        shell: pwsh
         run: |
-          latest=${{ steps.get_tag.outputs.latest }}
-          echo "Previous tag: $latest"
-          if [ -z "$latest" ]; then
-            newTag="v0.0.1"
-          else
-            IFS='.' read -r major minor patch <<< "${latest#v}"
-            patch=$((patch + 1))
-            newTag="v${major}.${minor}.${patch}"
-          fi
+          $latest = "${{ steps.get_tag.outputs.latest }}"
+          if ([string]::IsNullOrEmpty($latest)) {
+            $newTag = "v0.0.1"
+          } else {
+            $version = $latest.TrimStart("v").Split(".")
+            $major = [int]$version[0]
+            $minor = [int]$version[1]
+            $patch = [int]$version[2] + 1
+            $newTag = "v$major.$minor.$patch"
+          }
           echo "newTag=$newTag"
-          echo "::set-output name=tag::$newTag"
+          echo "tag=$newTag" >> $env:GITHUB_OUTPUT
 
       - name: Create and push new tag
         run: |
