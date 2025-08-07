@@ -161,21 +161,24 @@ class ControlPanel(tk.Toplevel):
 
             if not img_path:
                 self.logger.log("截图失败或取消")
-                self.screenshot_done_event.set()  # 防止卡死
+                self.screenshot_done_event.set()
+                self.root.after(0, self.deiconify)  # 显示控制面板
                 return
 
-            # 标注，阻塞直到完成
+            # 标注
             annotated_path = self.screenshot_tool.annotate(img_path)
             if not annotated_path:
                 self.logger.log("标注取消或失败")
-                self.screenshot_done_event.set()  # 即使失败也设置，防止卡死
+                self.screenshot_done_event.set()
+                self.root.after(0, self.deiconify)  # 显示控制面板
                 return
 
-            # 支持步骤文字
+            # 步骤说明
             step_note = ""
             if self.is_step_mode:
                 step = self.current_case_steps[self.current_step_index]
                 step_note = f"{step['步骤名称']} - {step['步骤描述']}"
+
             self.word_generator.add_image_to_word(filename, checkpoint, annotated_path, step_note)
 
             # 标记已执行
@@ -184,10 +187,11 @@ class ControlPanel(tk.Toplevel):
 
             self.screenshot_done_event.set()
             self.logger.log("screenshot_done_event.set() 已调用")
-            # 标注完成后启用完成按钮（线程安全）
             self.root.after(0, lambda: self.btn_complete.config(state="normal"))
+            self.root.after(0, self.deiconify)  # 截图完成后恢复控制面板显示
 
         self.screenshot_done_event.clear()
+        self.withdraw()  # 隐藏控制面板
         threading.Thread(target=run_screenshot_flow, daemon=True).start()
 
     def on_complete(self):
