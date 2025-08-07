@@ -1,0 +1,92 @@
+
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>截图标注自动化工具 - 操作文档</title>
+    <style>
+        body { font-family: "Arial", sans-serif; margin: 40px; line-height: 1.6; color: #333; }
+        h1, h2, h3 { color: #2c3e50; }
+        pre { background: #f4f4f4; padding: 10px; border-radius: 5px; overflow-x: auto; }
+        code { color: #e74c3c; }
+    </style>
+</head>
+<body>
+
+<h1>截图标注自动化工具 - 操作指南</h1>
+
+<h2>一、目录结构</h2>
+<pre><code>project-root/
+├── main.py
+├── .github/
+│   └── workflows/
+│       └── build.yml
+├── core/
+│   ├── screenshot.py
+│   └── test_runner.py
+├── ui/
+│   ├── annotator.py
+│   └── control_panel.py
+├── utils/
+│   ├── excel_handler.py
+│   ├── logger.py
+│   ├── path_utils.py
+│   └── word_generator.py
+├── excel_input/
+│   ├── 步骤版.xlsx
+│   └── 基础版.xlsx
+├── word_output/
+├── logs/
+│   └── output.log
+├── requirements.txt
+└── README.md</code></pre>
+
+<h2>二、功能介绍</h2>
+<p>本工具用于从 案例Excel 读取用例信息，逐条进行截图标注并自动生成 Word 报告，支持基础版与步骤版 Excel 模式。</p>
+
+<h3>基础版</h3>
+<ul>
+    <li>列字段：测试名称、验证点、测试结果</li>
+    <li>流程：按行读取用例，截图后更新测试结果为“已执行”</li>
+</ul>
+
+<h3>步骤版</h3>
+<ul>
+    <li>列字段：测试名称、验证点、步骤名称、步骤描述、预期结果、测试结果</li>
+    <li>流程：每个测试用例拆分为多个步骤，需逐步截图，每步生成 Word 插图</li>
+</ul>
+
+<h2>三、使用步骤</h2>
+<ol>
+    <li>将 Excel 文件放入 <code>excel_input</code> 目录。</li>
+    <li>运行 <code>Test Tool Plus - V2.0.exe</code> 启动程序。</li>
+    <li>自动识别 Excel 类型（基础版或步骤版）。</li>
+    <li>控制面板启动后，按顺序逐条用例进行截图标注。</li>
+    <li>每张截图会保存为 PNG，并插入 Word 文件。</li>
+    <li>截图完成后 Excel 自动标记为“已执行”。</li>
+    <li>输出的 Word 文件保存在 <code>word_output/</code>。</li>
+</ol>
+
+<h2>四、快捷键说明</h2>
+<ul>
+    <li><strong>F8</strong> - 启动截图并进入标注</li>
+    <li><strong>ESC</strong> - 退出标记，提示是否保存</li>
+    <li><strong>Ctrl + Z</strong> - 撤销当前标注</li>
+    <li><strong>Ctrl + S</strong> - 保存当前标注</li>
+</ul>
+
+<h2>五、注意事项</h2>
+<ul>
+    <li>请确保 Excel 文件格式正确，表头必须含有对应字段。</li>
+    <li>截图后如未保存标注，不能点击“下一步”或“完成”。</li>
+    <li>步骤版最后一步点击“完成”时可跳过截图。</li>
+</ul>
+
+<h2>六、常见问题排查</h2>
+<ul>
+    <li><strong>Excel 写入失败</strong>：请关闭 Excel 文件后重试。</li>
+    <li><strong>截图后按钮仍禁用</strong>：检查截图线程是否被打断，或是否手动取消标注。</li>
+</ul>
+
+</body>
+</html>

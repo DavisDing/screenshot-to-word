@@ -148,6 +148,8 @@ class ControlPanel(tk.Toplevel):
         self.btn_complete.config(state="disabled")
 
     def on_screenshot(self):
+        # 先隐藏窗口
+        self.withdraw()
         # 截图 + 标注 + Word生成流程
         def run_screenshot_flow():
             idx, filename, checkpoint = self.current_case
@@ -186,6 +188,7 @@ class ControlPanel(tk.Toplevel):
             self.logger.log("screenshot_done_event.set() 已调用")
             # 标注完成后启用完成按钮（线程安全）
             self.root.after(0, lambda: self.btn_complete.config(state="normal"))
+            self.root.after(0, self.deiconify)
 
         self.screenshot_done_event.clear()
         threading.Thread(target=run_screenshot_flow, daemon=True).start()

@@ -35,6 +35,15 @@ class ScreenshotTool:
         """
         弹出标注窗口，阻塞等待用户操作完成后返回最终图片路径
         """
+        # ✅ 等待图片生成，确保可用（最多等待2秒）
+        for _ in range(40):
+            if os.path.exists(image_path):
+                break
+            time.sleep(0.05)
+        else:
+            self.logger.log(f"标注前图片不存在：{image_path}")
+            return None
+
         result = {'done': False}
 
         def run_annotator():

@@ -16,9 +16,14 @@ class Annotator(tk.Toplevel):
         self.resizable(True, True)
 
         # 载入图片
-        self.original_image = Image.open(self.image_path).convert("RGBA")
-        self.draw_image = self.original_image.copy()
-        self.tk_image = ImageTk.PhotoImage(self.draw_image)
+        try:
+            self.original_image = Image.open(self.image_path).convert("RGBA")
+            self.draw_image = self.original_image.copy()
+            self.tk_image = ImageTk.PhotoImage(self.draw_image)
+        except Exception as e:
+            messagebox.showerror("图片加载失败", f"无法加载截图图片：\n{e}", parent=self)
+            self.destroy()
+            return
 
         self.canvas = tk.Canvas(self, width=self.tk_image.width(), height=self.tk_image.height(), cursor="cross")
         self.canvas.pack(fill="both", expand=True)
