@@ -11,6 +11,7 @@ class ExcelHandler:
         self.df = None
         self.root = root
         self.version = "基础版"
+        self.result_col_index = None
 
     def _show_error(self, msg: str):
         self.root.attributes('-topmost', True)
@@ -74,6 +75,23 @@ class ExcelHandler:
             self.logger.log("Excel列数不足3列")
             return False
 
+        try:
+            wb = load_workbook(self.file_path)
+            ws = wb.active
+            for i, cell in enumerate(ws[1], start=1):
+                if cell.value == "测试结果":
+                    self.result_col_index = i
+                    self.logger.log(f"检测到“测试结果”列在第 {i} 列")
+                    break
+            if self.result_col_index is None:
+                self._show_error("Excel中未找到“测试结果”列")
+                self.logger.log("Excel中未找到“测试结果”列")
+                return False
+        except Exception as e:
+            self._show_error(f"解析Excel列头失败：{e}")
+            self.logger.log(f"解析Excel列头失败：{e}")
+            return False
+
         return True
 
     def get_pending_cases(self):
@@ -87,12 +105,17 @@ class ExcelHandler:
                 yield idx, filename, checkpoint
 
     def mark_case_executed(self, index: int):
+        # 内存中DataFrame更新
         self.df.at[index, '测试结果'] = "已执行"
         try:
-            excel_row = index + 2  # 考虑到 DataFrame 第一行为表头
+            if self.result_col_index is None:
+                self._show_error("内部错误：测试结果列索引未初始化")
+                self.logger.log("错误：result_col_index 为 None，可能未正确加载 Excel")
+                return
+            excel_row = index + 2  # DataFrame 第一行为表头
             wb = load_workbook(self.file_path)
             ws = wb.active
-            ws.cell(row=excel_row, column=3).value = "已执行"
+            ws.cell(row=excel_row, column=self.result_col_index).value = "已执行"
             wb.save(self.file_path)
             self.logger.log(f"更新用例行 {excel_row} 状态为 已执行")
         except PermissionError:
