@@ -15,20 +15,11 @@ class Annotator(tk.Toplevel):
         self.protocol("WM_DELETE_WINDOW", self.on_close)
         self.resizable(True, True)
 
-        # 载入图片
-        try:
-            self.original_image = Image.open(self.image_path).convert("RGBA")
-            self.draw_image = self.original_image.copy()
-            self.tk_image = ImageTk.PhotoImage(self.draw_image)
-        except Exception as e:
-            messagebox.showerror("图片加载失败", f"无法加载截图图片：\n{e}", parent=self)
-            self.destroy()
-            return
-
-        self.canvas = tk.Canvas(self, width=self.tk_image.width(), height=self.tk_image.height(), cursor="cross")
+        self.canvas = tk.Canvas(self, cursor="cross")
         self.canvas.pack(fill="both", expand=True)
 
-        self.canvas_image = self.canvas.create_image(0, 0, anchor="nw", image=self.tk_image)
+        # 延迟加载图片，确保窗口初始化完成
+        self.after(10, self.load_image)
 
         # 标注数据
         self.shapes = []  # (type, data)，type: 'circle'/'text'
@@ -107,3 +98,14 @@ class Annotator(tk.Toplevel):
 
     def on_close(self):
         self.on_escape()
+    def load_image(self):
+        try:
+            self.original_image = Image.open(self.image_path).convert("RGBA")
+            self.draw_image = self.original_image.copy()
+            self.tk_image = ImageTk.PhotoImage(self.draw_image)
+
+            self.canvas.config(width=self.tk_image.width(), height=self.tk_image.height())
+            self.canvas_image = self.canvas.create_image(0, 0, anchor="nw", image=self.tk_image)
+        except Exception as e:
+            messagebox.showerror("图片加载失败", f"无法加载截图图片：\n{e}", parent=self)
+            self.destroy()
