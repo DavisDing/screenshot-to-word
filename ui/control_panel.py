@@ -67,13 +67,13 @@ class ControlPanel(tk.Toplevel):
 
         # 信息显示区域（底部）
         info_frame = tk.Frame(self)
-        info_frame.pack(pady=10, fill="both", expand=True)
+        info_frame.pack(pady=10, padx=10, fill="both", expand=True)
 
         def add_row(label_text, attr_name):
             label = tk.Label(info_frame, text=label_text, anchor="w", font=("Arial", 10, "bold"))
             label.grid(row=add_row.row_index, column=0, sticky="nw", padx=5, pady=2)
             value_label = tk.Label(info_frame, text="", anchor="w", wraplength=360, justify="left")
-            value_label.grid(row=add_row.row_index, column=1, sticky="nw", padx=5, pady=2)
+            value_label.grid(row=add_row.row_index, column=1, sticky="nw", padx=(5, 10), pady=2)
             setattr(self, attr_name, value_label)
             add_row.row_index += 1
 
@@ -113,6 +113,15 @@ class ControlPanel(tk.Toplevel):
             self.lbl_step_name.grid()
             self.lbl_step_desc.grid()
             self.lbl_expected.grid()
+
+            # 按钮状态控制：最后一步禁用“下一步”，启用“完成”
+            steps = self.current_case_steps
+            if self.current_step_index == len(steps) - 1:
+                self.btn_next.config(state="disabled")
+                self.btn_complete.config(state="normal")
+            else:
+                self.btn_next.config(state="normal")
+                self.btn_complete.config(state="disabled")
             return
 
         # 基础版处理
@@ -135,6 +144,8 @@ class ControlPanel(tk.Toplevel):
             text=f"第 {self.current_index + 1} 条 / 共 {len(self.pending_cases)} 条"
         )
         self.logger.log(f"当前执行用例：{filename} - 验证点：{checkpoint}")
+        # 禁用完成按钮，等待截图
+        self.btn_complete.config(state="disabled")
 
     def on_screenshot(self):
         # 截图 + 标注 + Word生成流程
@@ -150,12 +161,14 @@ class ControlPanel(tk.Toplevel):
 
             if not img_path:
                 self.logger.log("截图失败或取消")
+                self.screenshot_done_event.set()  # 防止卡死
                 return
 
             # 标注，阻塞直到完成
             annotated_path = self.screenshot_tool.annotate(img_path)
             if not annotated_path:
                 self.logger.log("标注取消或失败")
+                self.screenshot_done_event.set()  # 即使失败也设置，防止卡死
                 return
 
             # 支持步骤文字
@@ -170,25 +183,41 @@ class ControlPanel(tk.Toplevel):
             self.logger.log(f"用例 {filename} 标记为已执行")
 
             self.screenshot_done_event.set()
+            self.logger.log("screenshot_done_event.set() 已调用")
+            # 标注完成后启用完成按钮（线程安全）
+            self.root.after(0, lambda: self.btn_complete.config(state="normal"))
 
         self.screenshot_done_event.clear()
         threading.Thread(target=run_screenshot_flow, daemon=True).start()
 
     def on_complete(self):
+        if self.is_step_mode and self.current_step_index == len(self.current_case_steps) - 1:
+            # 最后一步允许直接完成，无需截图完成标记
+            self.current_case_key_index += 1
+            self.current_step_index = 0
+            self.load_case()
+            self.screenshot_done_event.clear()
+            return
+
         if not self.screenshot_done_event.is_set():
             self._show_warning("请先截图并完成标注后，再点击完成。")
             return
+
         if self.is_step_mode:
             self.current_case_key_index += 1
             self.current_step_index = 0
             self.load_case()
+            self.screenshot_done_event.clear()
             return
+
         self.current_index += 1
         self.load_case()
         self.screenshot_done_event.clear()
 
     def on_next_step(self):
+        self.logger.log(f"on_next_step: screenshot_done_event.is_set()={self.screenshot_done_event.is_set()}")
         if not self.screenshot_done_event.is_set():
+            self.logger.log("on_next_step: 检测到 screenshot_done_event 未 set，阻止进入下一步")
             self._show_warning("请先完成当前步骤截图")
             return
         self.current_step_index += 1
