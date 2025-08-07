@@ -40,26 +40,27 @@ class ControlPanel(tk.Toplevel):
 
         self.create_widgets()
         self.load_case()
+        self.bind("<Configure>", self._on_resize)
 
     def create_widgets(self):
-        self.lbl_case_name = tk.Label(self, text="用例名: ", wraplength=380, justify="left")
-        self.lbl_case_name.pack(pady=5, fill="x")
+        info_frame = tk.Frame(self)
+        info_frame.pack(pady=5, fill="both", expand=True)
 
-        self.lbl_checkpoint = tk.Label(self, text="验证点: ", wraplength=380, justify="left")
-        self.lbl_checkpoint.pack(pady=5, fill="x")
+        def add_row(label_text, attr_name):
+            label = tk.Label(info_frame, text=label_text, anchor="w", font=("Arial", 10, "bold"))
+            label.grid(row=add_row.row_index, column=0, sticky="nw", padx=5, pady=2)
+            value_label = tk.Label(info_frame, text="", anchor="w", wraplength=360, justify="left")
+            value_label.grid(row=add_row.row_index, column=1, sticky="nw", padx=5, pady=2)
+            setattr(self, attr_name, value_label)
+            add_row.row_index += 1
 
-        # 步骤名称与描述标签
-        self.lbl_step_name = tk.Label(self, text="步骤名称: ", wraplength=380, justify="left")
-        self.lbl_step_name.pack(pady=2, fill="x")
-
-        self.lbl_step_desc = tk.Label(self, text="步骤描述: ", wraplength=380, justify="left")
-        self.lbl_step_desc.pack(pady=2, fill="x")
-
-        self.lbl_expected = tk.Label(self, text="预期结果: ", wraplength=380, justify="left")
-        self.lbl_expected.pack(pady=2, fill="x")
-
-        self.lbl_progress = tk.Label(self, text="当前进度：", font=("Arial", 10), wraplength=380, justify="left")
-        self.lbl_progress.pack(pady=5, fill="x")
+        add_row.row_index = 0
+        add_row("用例名：", "lbl_case_name")
+        add_row("验证点：", "lbl_checkpoint")
+        add_row("步骤名称：", "lbl_step_name")
+        add_row("步骤描述：", "lbl_step_desc")
+        add_row("预期结果：", "lbl_expected")
+        add_row("当前进度：", "lbl_progress")
 
         btn_frame = tk.Frame(self)
         btn_frame.pack(pady=10, fill="x", expand=True, anchor="center")
@@ -101,10 +102,15 @@ class ControlPanel(tk.Toplevel):
             self.lbl_step_name.config(text=f"步骤名称: {step.get('步骤名称', '')}")
             self.lbl_step_desc.config(text=f"步骤描述: {step.get('步骤描述', '')}")
             self.lbl_expected.config(text=f"预期结果: {step.get('预期结果', '')}")
+            remaining_cases = len(self.step_case_keys) - self.current_case_key_index - 1
             self.lbl_progress.config(
-                text=f"当前进度：{case_key[0]} - {case_key[1]} 第 {self.current_step_index + 1} 步 / 共 {len(self.current_case_steps)} 步"
+                text=f"当前进度：第 {self.current_step_index + 1} 步 / 共 {len(self.current_case_steps)} 步，剩余 {remaining_cases} 条案例"
             )
             self.btn_complete.config(state="disabled")
+            # 显示步骤相关标签
+            self.lbl_step_name.grid()
+            self.lbl_step_desc.grid()
+            self.lbl_expected.grid()
             return
 
         # 基础版处理
@@ -116,8 +122,13 @@ class ControlPanel(tk.Toplevel):
         self.current_case = (idx, filename, checkpoint)
         self.lbl_case_name.config(text=f"用例名: {filename}")
         self.lbl_checkpoint.config(text=f"验证点: {checkpoint}")
-        self.lbl_step_name.config(text="步骤名称: ")
-        self.lbl_step_desc.config(text="步骤描述: ")
+        # 隐藏步骤相关标签
+        self.lbl_step_name.config(text="")
+        self.lbl_step_desc.config(text="")
+        self.lbl_expected.config(text="")
+        self.lbl_step_name.grid_remove()
+        self.lbl_step_desc.grid_remove()
+        self.lbl_expected.grid_remove()
         self.lbl_progress.config(
             text=f"当前进度：第 {self.current_index + 1} 条 / 共 {len(self.pending_cases)} 条"
         )
@@ -183,6 +194,18 @@ class ControlPanel(tk.Toplevel):
         self.load_case()
 
     def on_skip(self):
+        if self.is_step_mode:
+            self.logger.log(f"跳过步骤 {self.current_step_index + 1}")
+            self.current_step_index += 1
+            self.screenshot_done_event.clear()
+
+            if self.current_step_index >= len(self.current_case_steps):
+                self.logger.log("当前用例所有步骤已跳过，进入下一用例")
+                self.current_case_key_index += 1
+                self.current_step_index = 0
+            self.load_case()
+            return
+
         self.logger.log(f"跳过用例 {self.current_case[1]}")
         self.current_index += 1
         self.load_case()
@@ -208,3 +231,13 @@ class ControlPanel(tk.Toplevel):
         self.root.attributes('-topmost', True)
         messagebox.showwarning("警告", msg, parent=self.root)
         self.root.attributes('-topmost', False)
+
+    def _on_resize(self, event):
+        try:
+            new_wraplength = max(event.width - 120, 100)
+            for attr in ["lbl_case_name", "lbl_checkpoint", "lbl_step_name", "lbl_step_desc", "lbl_expected", "lbl_progress"]:
+                label = getattr(self, attr, None)
+                if label:
+                    label.config(wraplength=new_wraplength)
+        except Exception as e:
+            self.logger.log(f"自动调整wraplength失败: {e}")
