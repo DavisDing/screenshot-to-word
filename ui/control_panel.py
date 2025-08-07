@@ -97,11 +97,11 @@ class ControlPanel(tk.Toplevel):
 
             step = self.current_case_steps[self.current_step_index]
             self.current_case = (step["index"], case_key[0], case_key[1])
-            self.lbl_case_name.config(text=f"用例名: {case_key[0]}")
-            self.lbl_checkpoint.config(text=f"验证点: {case_key[1]}")
-            self.lbl_step_name.config(text=f"步骤名称: {step.get('步骤名称', '')}")
-            self.lbl_step_desc.config(text=f"步骤描述: {step.get('步骤描述', '')}")
-            self.lbl_expected.config(text=f"预期结果: {step.get('预期结果', '')}")
+            self.lbl_case_name.config(text=case_key[0])
+            self.lbl_checkpoint.config(text=case_key[1])
+            self.lbl_step_name.config(text=step.get('步骤名称', ''))
+            self.lbl_step_desc.config(text=step.get('步骤描述', ''))
+            self.lbl_expected.config(text=step.get('预期结果', ''))
             remaining_cases = len(self.step_case_keys) - self.current_case_key_index - 1
             self.lbl_progress.config(
                 text=f"当前进度：第 {self.current_step_index + 1} 步 / 共 {len(self.current_case_steps)} 步，剩余 {remaining_cases} 条案例"
@@ -120,8 +120,8 @@ class ControlPanel(tk.Toplevel):
 
         idx, filename, checkpoint = self.pending_cases[self.current_index]
         self.current_case = (idx, filename, checkpoint)
-        self.lbl_case_name.config(text=f"用例名: {filename}")
-        self.lbl_checkpoint.config(text=f"验证点: {checkpoint}")
+        self.lbl_case_name.config(text=filename)
+        self.lbl_checkpoint.config(text=checkpoint)
         # 隐藏步骤相关标签
         self.lbl_step_name.config(text="")
         self.lbl_step_desc.config(text="")
