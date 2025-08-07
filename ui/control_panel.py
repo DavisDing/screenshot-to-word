@@ -44,10 +44,15 @@ class ControlPanel(tk.Toplevel):
         self.lbl_progress.pack(pady=5, fill="x")
 
         btn_frame = tk.Frame(self)
-        btn_frame.pack(pady=10, fill="x", expand=True)
+        btn_frame.pack(pady=10, fill="x", expand=True, anchor="center")
+
+        btn_frame.grid_columnconfigure(0, weight=1)
+        btn_frame.grid_columnconfigure(1, weight=1)
+        btn_frame.grid_columnconfigure(2, weight=1)
 
         self.btn_screenshot = tk.Button(btn_frame, text="截图 (F8)", command=self.on_screenshot)
         self.btn_screenshot.grid(row=0, column=0, padx=5)
+        self.bind_all("<F8>", lambda event: self.on_screenshot())
 
         self.btn_complete = tk.Button(btn_frame, text="完成", command=self.on_complete)
         self.btn_complete.grid(row=0, column=1, padx=5)
@@ -64,6 +69,9 @@ class ControlPanel(tk.Toplevel):
         self.current_case = (idx, filename, checkpoint)
         self.lbl_case_name.config(text=f"用例名: {filename}")
         self.lbl_checkpoint.config(text=f"验证点: {checkpoint}")
+        self.lbl_progress.config(
+            text=f"当前进度：第 {self.current_index + 1} 条 / 共 {len(self.pending_cases)} 条"
+        )
         self.logger.log(f"当前执行用例：{filename} - 验证点：{checkpoint}")
 
     def on_screenshot(self):

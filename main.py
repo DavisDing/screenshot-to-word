@@ -33,17 +33,18 @@ class DesktopTestToolApp:
         self.logger.log("程序启动，界面加载完成")
 
     def create_main_ui(self):
-        tk.Label(self.root, text=APP_TITLE, font=("Arial", 16), wraplength=380, justify="left").pack(pady=10, fill="x")
-        link = tk.Label(self.root, text="GitHub", fg="blue", cursor="hand2", font=("Arial", 10))
-        link.pack(pady=0)
-        link.bind("<Button-1>", lambda e: webbrowser.open_new("https://github.com/DavisDing/screenshot-to-word"))
 
         start_btn = tk.Button(self.root, text="开始执行", width=20, command=self.on_start)
         start_btn.pack(pady=5, fill="x")
 
         exit_btn = tk.Button(self.root, text="退出", width=20, command=self.on_exit)
         exit_btn.pack(pady=5, fill="x")
+        
+        tk.Label(self.root, text=APP_TITLE, font=("Arial", 16), wraplength=380, justify="left").pack(pady=10, fill="x")
 
+        link = tk.Label(self.root, text="GitHub", fg="blue", cursor="hand2", font=("Arial", 10))
+        link.pack(pady=0)
+        link.bind("<Button-1>", lambda e: webbrowser.open_new("https://github.com/DavisDing/screenshot-to-word"))
     def on_start(self):
         self.logger.log("点击开始执行按钮")
         thread = threading.Thread(target=self.test_runner.run_tests)
