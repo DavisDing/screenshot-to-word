@@ -76,4 +76,4 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload ${{ steps.new_tag.outputs.tag }} ./DesktopTestTool-win.zip
+          gh release upload ${{ steps.new_tag.outputs.tag }} ./DesktopTestTool-win.zip --clobber
