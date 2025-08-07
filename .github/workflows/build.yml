@@ -1,18 +1,48 @@
-name: Build Windows Executable on Push
+name: Build Windows Executable, Auto Tag and Release
 
 on:
-  push:         # 任意 push 都会触发（可加 branch 条件）
+  push:
     branches:
-      - '*'    # 可改成你使用的主分支名（如 master、dev）
+      - '*'    # 可根据实际情况限定主分支
   workflow_dispatch:
 
 jobs:
-  build:
+  build_and_release:
     runs-on: windows-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Get latest tag
+        id: get_tag
+        run: |
+          git fetch --tags
+          latestTag=$(git describe --tags `git rev-list --tags --max-count=1`)
+          echo "latestTag=$latestTag"
+          echo "::set-output name=latest::$latestTag"
+
+      - name: Calculate new tag
+        id: new_tag
+        run: |
+          latest=${{ steps.get_tag.outputs.latest }}
+          echo "Previous tag: $latest"
+          if [ -z "$latest" ]; then
+            newTag="v0.0.1"
+          else
+            IFS='.' read -r major minor patch <<< "${latest#v}"
+            patch=$((patch + 1))
+            newTag="v${major}.${minor}.${patch}"
+          fi
+          echo "newTag=$newTag"
+          echo "::set-output name=tag::$newTag"
+
+      - name: Create and push new tag
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git tag ${{ steps.new_tag.outputs.tag }}
+          git push origin ${{ steps.new_tag.outputs.tag }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -32,8 +62,10 @@ jobs:
       - name: Zip exe
         run: Compress-Archive -Path dist/DesktopTestTool.exe -DestinationPath DesktopTestTool-win.zip
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: DesktopTestTool
-          path: DesktopTestTool-win.zip
+      - name: Create GitHub Release and Upload Asset
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create ${{ steps.new_tag.outputs.tag }} ./DesktopTestTool-win.zip \
+            --title "Release ${{ steps.new_tag.outputs.tag }}" \
+            --notes "Automated release for version ${{ steps.new_tag.outputs.tag }}"
