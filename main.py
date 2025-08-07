@@ -16,7 +16,7 @@ class DesktopTestToolApp:
         self.root = tk.Tk()
         self.root.title(APP_TITLE)
         self.root.geometry("400x200")
-        self.root.resizable(False, False)
+        self.root.resizable(True, True)
 
         self.logger = Logger(self.root)
 
@@ -32,13 +32,13 @@ class DesktopTestToolApp:
         self.logger.log("程序启动，界面加载完成")
 
     def create_main_ui(self):
-        tk.Label(self.root, text=APP_TITLE, font=("Arial", 16)).pack(pady=10)
+        tk.Label(self.root, text=APP_TITLE, font=("Arial", 16), wraplength=380, justify="left").pack(pady=10, fill="x")
 
         start_btn = tk.Button(self.root, text="开始执行", width=20, command=self.on_start)
-        start_btn.pack(pady=5)
+        start_btn.pack(pady=5, fill="x")
 
         exit_btn = tk.Button(self.root, text="退出", width=20, command=self.on_exit)
-        exit_btn.pack(pady=5)
+        exit_btn.pack(pady=5, fill="x")
 
     def on_start(self):
         self.logger.log("点击开始执行按钮")

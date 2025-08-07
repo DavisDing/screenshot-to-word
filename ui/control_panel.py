@@ -19,6 +19,7 @@ class ControlPanel(tk.Toplevel):
         self.geometry("400x200")
         self.attributes("-topmost", True)
         self.protocol("WM_DELETE_WINDOW", self.on_exit)
+        self.resizable(True, True)
 
         # 状态变量
         self.current_index = 0
@@ -33,14 +34,17 @@ class ControlPanel(tk.Toplevel):
         self.load_case()
 
     def create_widgets(self):
-        self.lbl_case_name = tk.Label(self, text="用例名: ")
-        self.lbl_case_name.pack(pady=5)
+        self.lbl_case_name = tk.Label(self, text="用例名: ", wraplength=380, justify="left")
+        self.lbl_case_name.pack(pady=5, fill="x")
 
-        self.lbl_checkpoint = tk.Label(self, text="验证点: ")
-        self.lbl_checkpoint.pack(pady=5)
+        self.lbl_checkpoint = tk.Label(self, text="验证点: ", wraplength=380, justify="left")
+        self.lbl_checkpoint.pack(pady=5, fill="x")
+
+        self.lbl_progress = tk.Label(self, text="当前进度：", font=("Arial", 10), wraplength=380, justify="left")
+        self.lbl_progress.pack(pady=5, fill="x")
 
         btn_frame = tk.Frame(self)
-        btn_frame.pack(pady=10)
+        btn_frame.pack(pady=10, fill="x", expand=True)
 
         self.btn_screenshot = tk.Button(btn_frame, text="截图 (F8)", command=self.on_screenshot)
         self.btn_screenshot.grid(row=0, column=0, padx=5)
