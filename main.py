@@ -8,6 +8,15 @@ from core.test_runner import TestRunner
 
 APP_TITLE = "测试工具 - V1.0.0 作者: DingHao"
 
+def show_splash_screen():
+    splash = tk.Tk()
+    splash.overrideredirect(True)
+    splash.geometry("300x150+600+300")
+    splash.configure(bg="white")
+    tk.Label(splash, text="正在启动测试工具...", font=("Arial", 14), bg="white").pack(expand=True)
+    splash.update()
+    return splash
+
 class DesktopTestToolApp:
     def __init__(self):
         import os
@@ -30,7 +39,7 @@ class DesktopTestToolApp:
         self.test_runner = TestRunner(self.logger, self.excel_handler, self.root)
 
         self.create_main_ui()
-        self.logger.log("程序启动，界面加载完成")
+        self.root.after(100, lambda: self.logger.log("程序启动，界面加载完成"))
 
     def create_main_ui(self):
 
@@ -50,6 +59,8 @@ class DesktopTestToolApp:
         link.bind("<Button-1>", lambda e: webbrowser.open_new("https://github.com/DavisDing/screenshot-to-word"))
     def on_start(self):
         self.logger.log("点击开始执行按钮")
+        # 每次开始前重置 TestRunner 内部状态，确保 event、index 等状态干净
+        self.test_runner.reset()
         thread = threading.Thread(target=self.test_runner.run_tests)
         thread.daemon = True
         thread.start()
@@ -62,5 +73,7 @@ class DesktopTestToolApp:
         self.root.mainloop()
 
 if __name__ == "__main__":
+    splash = show_splash_screen()
     app = DesktopTestToolApp()
+    splash.destroy()
     app.run()

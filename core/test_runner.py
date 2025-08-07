@@ -10,6 +10,11 @@ class TestRunner:
         self.control_panel = None
         self.pending_cases = []
 
+    def reset(self):
+        self.logger.log("重置 TestRunner 状态")
+        self.control_panel = None
+        self.pending_cases = []
+
     def run_tests(self):
         try:
             self.logger.log("测试运行开始")
