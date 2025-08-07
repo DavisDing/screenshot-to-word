@@ -46,12 +46,6 @@ jobs:
           echo "newTag=$newTag"
           echo "tag=$newTag" >> $env:GITHUB_OUTPUT
 
-      - name: Create and push new tag
-        run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git tag ${{ steps.new_tag.outputs.tag }}
-          git push origin ${{ steps.new_tag.outputs.tag }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -71,10 +65,15 @@ jobs:
       - name: Zip exe
         run: Compress-Archive -Path dist/DesktopTestTool.exe -DestinationPath DesktopTestTool-win.zip
 
-      - name: Create GitHub Release and Upload Asset
+      - name: Create GitHub Release (auto tag if not exists)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create ${{ steps.new_tag.outputs.tag }} ./DesktopTestTool-win.zip \
-            --title "Release ${{ steps.new_tag.outputs.tag }}" \
-            --notes "Automated release for version ${{ steps.new_tag.outputs.tag }}"
+          gh auth status
+          gh release view ${{ steps.new_tag.outputs.tag }} || gh release create ${{ steps.new_tag.outputs.tag }} --title "Release ${{ steps.new_tag.outputs.tag }}" --notes "Automated release for version ${{ steps.new_tag.outputs.tag }}"
+
+      - name: Upload Release Asset
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload ${{ steps.new_tag.outputs.tag }} ./DesktopTestTool-win.zip
