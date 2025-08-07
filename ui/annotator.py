@@ -106,10 +106,13 @@ class Annotator(tk.Toplevel):
         try:
             self.original_image = Image.open(self.image_path).convert("RGBA")
             self.draw_image = self.original_image.copy()
-            self.tk_image = ImageTk.PhotoImage(self.draw_image)
 
-            self.canvas.config(width=self.tk_image.width(), height=self.tk_image.height())
-            self.canvas_image = self.canvas.create_image(0, 0, anchor="nw", image=self.tk_image)
+            def display_image():
+                self.tk_image = ImageTk.PhotoImage(self.draw_image)
+                self.canvas.config(width=self.tk_image.width(), height=self.tk_image.height())
+                self.canvas_image = self.canvas.create_image(0, 0, anchor="nw", image=self.tk_image)
+
+            self.after(0, display_image)  # 确保在主循环中执行图像显示
         except Exception as e:
-            messagebox.showerror("图片加载失败", f"无法加载截图图片：\n{e}", parent=self)
-            self.destroy()
+            self.after(0, lambda: messagebox.showerror("图片加载失败", f"无法加载截图图片：\n{e}", parent=self))
+            self.after(0, self.destroy)
