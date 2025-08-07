@@ -106,7 +106,7 @@ class ControlPanel(tk.Toplevel):
             self.lbl_expected.config(text=step.get('预期结果', ''))
             remaining_cases = len(self.step_case_keys) - self.current_case_key_index - 1
             self.lbl_progress.config(
-                text=f"当前进度：第 {self.current_step_index + 1} 步 / 共 {len(self.current_case_steps)} 步，剩余 {remaining_cases} 条案例"
+                text=f"第 {self.current_step_index + 1} 步 / 共 {len(self.current_case_steps)} 步，剩余 {remaining_cases} 条案例"
             )
             self.btn_complete.config(state="disabled")
             # 显示步骤相关标签
@@ -132,7 +132,7 @@ class ControlPanel(tk.Toplevel):
         self.lbl_step_desc.grid_remove()
         self.lbl_expected.grid_remove()
         self.lbl_progress.config(
-            text=f"当前进度：第 {self.current_index + 1} 条 / 共 {len(self.pending_cases)} 条"
+            text=f"第 {self.current_index + 1} 条 / 共 {len(self.pending_cases)} 条"
         )
         self.logger.log(f"当前执行用例：{filename} - 验证点：{checkpoint}")
 
@@ -236,7 +236,8 @@ class ControlPanel(tk.Toplevel):
 
     def _on_resize(self, event):
         try:
-            new_wraplength = max(event.width - 120, 100)
+            width = self.winfo_width()
+            new_wraplength = max(width - 160, 120)
             for attr in ["lbl_case_name", "lbl_checkpoint", "lbl_step_name", "lbl_step_desc", "lbl_expected", "lbl_progress"]:
                 label = getattr(self, attr, None)
                 if label:
