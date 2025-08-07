@@ -60,7 +60,7 @@ jobs:
 
       - name: Build exe with PyInstaller
         run: |
-          pyinstaller main.py --name "DesktopTestTool" --noconfirm --onefile
+          pyinstaller main.py --name "DesktopTestTool" --noconfirm --onefile --noconsole --icon=icon.ico
 
       - name: Zip exe
         run: Compress-Archive -Path dist/DesktopTestTool.exe -DestinationPath DesktopTestTool-win.zip
