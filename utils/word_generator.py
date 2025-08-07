@@ -14,9 +14,9 @@ class WordGenerator:
         self.output_dir = os.path.join(base_dir, "word_output")
         os.makedirs(self.output_dir, exist_ok=True)
 
-    def add_image_to_word(self, case_name, checkpoint, image_path):
+    def add_image_to_word(self, case_name, checkpoint, image_path, step_note=""):
         """
-        新建或追加Word文档，插入用例名、验证点、图片
+        新建或追加Word文档，插入用例名、验证点、（可选）步骤说明和图片
         """
 
         doc_path = os.path.join(self.output_dir, f"{case_name}.docx")
@@ -32,6 +32,9 @@ class WordGenerator:
             doc = Document()
             doc.add_heading(case_name, level=1)
             doc.add_paragraph(checkpoint)
+
+        if step_note:
+            doc.add_paragraph(step_note)
 
         # 插入图片，自动适应宽度
         try:

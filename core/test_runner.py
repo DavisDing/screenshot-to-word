@@ -21,6 +21,18 @@ class TestRunner:
                 self.logger.log("加载 Excel 文件失败")
                 return
 
+            if self.excel_handler.version == "步骤版":
+                step_cases = self.excel_handler.get_step_cases()
+                if not step_cases:
+                    self.logger.log("步骤版无有效用例")
+                    return
+                from ui.control_panel import ControlPanel
+                self.control_panel = ControlPanel(self.logger, step_cases, self.excel_handler, self.root, is_step_mode=True)
+                self.root.withdraw()
+                self.control_panel.deiconify()
+                self.control_panel.grab_set()
+                return
+
             self.pending_cases = list(self.excel_handler.get_pending_cases())
             if not self.pending_cases:
                 self.root.attributes('-topmost', True)

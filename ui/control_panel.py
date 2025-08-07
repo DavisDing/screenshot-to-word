@@ -8,7 +8,7 @@ from core.screenshot import ScreenshotTool
 from utils.word_generator import WordGenerator
 
 class ControlPanel(tk.Toplevel):
-    def __init__(self, logger, pending_cases, excel_handler, root):
+    def __init__(self, logger, pending_cases, excel_handler, root, is_step_mode=False):
         super().__init__(root)
         self.logger = logger
         self.pending_cases = pending_cases
@@ -30,6 +30,14 @@ class ControlPanel(tk.Toplevel):
         # 事件控制，截图完成通知
         self.screenshot_done_event = threading.Event()
 
+        self.is_step_mode = is_step_mode
+        if self.is_step_mode:
+            self.step_case_keys = list(pending_cases.keys())
+            self.current_case_key_index = 0
+            self.current_step_index = 0
+            self.pending_cases = pending_cases
+            self.current_case_steps = []
+
         self.create_widgets()
         self.load_case()
 
@@ -40,6 +48,16 @@ class ControlPanel(tk.Toplevel):
         self.lbl_checkpoint = tk.Label(self, text="验证点: ", wraplength=380, justify="left")
         self.lbl_checkpoint.pack(pady=5, fill="x")
 
+        # 步骤名称与描述标签
+        self.lbl_step_name = tk.Label(self, text="步骤名称: ", wraplength=380, justify="left")
+        self.lbl_step_name.pack(pady=2, fill="x")
+
+        self.lbl_step_desc = tk.Label(self, text="步骤描述: ", wraplength=380, justify="left")
+        self.lbl_step_desc.pack(pady=2, fill="x")
+
+        self.lbl_expected = tk.Label(self, text="预期结果: ", wraplength=380, justify="left")
+        self.lbl_expected.pack(pady=2, fill="x")
+
         self.lbl_progress = tk.Label(self, text="当前进度：", font=("Arial", 10), wraplength=380, justify="left")
         self.lbl_progress.pack(pady=5, fill="x")
 
@@ -49,6 +67,7 @@ class ControlPanel(tk.Toplevel):
         btn_frame.grid_columnconfigure(0, weight=1)
         btn_frame.grid_columnconfigure(1, weight=1)
         btn_frame.grid_columnconfigure(2, weight=1)
+        btn_frame.grid_columnconfigure(3, weight=1)
 
         self.btn_screenshot = tk.Button(btn_frame, text="截图 (F8)", command=self.on_screenshot)
         self.btn_screenshot.grid(row=0, column=0, padx=5)
@@ -60,7 +79,35 @@ class ControlPanel(tk.Toplevel):
         self.btn_skip = tk.Button(btn_frame, text="跳过", command=self.on_skip)
         self.btn_skip.grid(row=0, column=2, padx=5)
 
+        self.btn_next = tk.Button(btn_frame, text="下一步", command=self.on_next_step)
+        self.btn_next.grid(row=0, column=3, padx=5)
+
     def load_case(self):
+        if self.is_step_mode:
+            if self.current_case_key_index >= len(self.step_case_keys):
+                self.finish_all_cases()
+                return
+
+            case_key = self.step_case_keys[self.current_case_key_index]
+            self.current_case_steps = self.pending_cases[case_key]
+            if self.current_step_index >= len(self.current_case_steps):
+                self.btn_complete.config(state="normal")
+                return
+
+            step = self.current_case_steps[self.current_step_index]
+            self.current_case = (step["index"], case_key[0], case_key[1])
+            self.lbl_case_name.config(text=f"用例名: {case_key[0]}")
+            self.lbl_checkpoint.config(text=f"验证点: {case_key[1]}")
+            self.lbl_step_name.config(text=f"步骤名称: {step.get('步骤名称', '')}")
+            self.lbl_step_desc.config(text=f"步骤描述: {step.get('步骤描述', '')}")
+            self.lbl_expected.config(text=f"预期结果: {step.get('预期结果', '')}")
+            self.lbl_progress.config(
+                text=f"当前进度：{case_key[0]} - {case_key[1]} 第 {self.current_step_index + 1} 步 / 共 {len(self.current_case_steps)} 步"
+            )
+            self.btn_complete.config(state="disabled")
+            return
+
+        # 基础版处理
         if self.current_index >= len(self.pending_cases):
             self.finish_all_cases()
             return
@@ -69,6 +116,8 @@ class ControlPanel(tk.Toplevel):
         self.current_case = (idx, filename, checkpoint)
         self.lbl_case_name.config(text=f"用例名: {filename}")
         self.lbl_checkpoint.config(text=f"验证点: {checkpoint}")
+        self.lbl_step_name.config(text="步骤名称: ")
+        self.lbl_step_desc.config(text="步骤描述: ")
         self.lbl_progress.config(
             text=f"当前进度：第 {self.current_index + 1} 条 / 共 {len(self.pending_cases)} 条"
         )
@@ -96,8 +145,12 @@ class ControlPanel(tk.Toplevel):
                 self.logger.log("标注取消或失败")
                 return
 
-            # 生成Word文档或追加图片
-            self.word_generator.add_image_to_word(filename, checkpoint, annotated_path)
+            # 支持步骤文字
+            step_note = ""
+            if self.is_step_mode:
+                step = self.current_case_steps[self.current_step_index]
+                step_note = f"{step['步骤名称']} - {step['步骤描述']}"
+            self.word_generator.add_image_to_word(filename, checkpoint, annotated_path, step_note)
 
             # 标记已执行
             self.excel_handler.mark_case_executed(idx)
@@ -112,9 +165,22 @@ class ControlPanel(tk.Toplevel):
         if not self.screenshot_done_event.is_set():
             self._show_warning("请先截图并完成标注后，再点击完成。")
             return
+        if self.is_step_mode:
+            self.current_case_key_index += 1
+            self.current_step_index = 0
+            self.load_case()
+            return
         self.current_index += 1
         self.load_case()
         self.screenshot_done_event.clear()
+
+    def on_next_step(self):
+        if not self.screenshot_done_event.is_set():
+            self._show_warning("请先完成当前步骤截图")
+            return
+        self.current_step_index += 1
+        self.screenshot_done_event.clear()
+        self.load_case()
 
     def on_skip(self):
         self.logger.log(f"跳过用例 {self.current_case[1]}")
