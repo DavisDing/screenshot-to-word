@@ -47,9 +47,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create ${{ steps.auto-tag.outputs.new_tag }} \
-            --title "Release ${{ steps.auto-tag.outputs.new_tag }}" \
-            --notes "Automated release for version ${{ steps.auto-tag.outputs.new_tag }}"
+          gh release create ${{ steps.auto-tag.outputs.new_tag }} --title "Release ${{ steps.auto-tag.outputs.new_tag }}" --notes "Automated release for version ${{ steps.auto-tag.outputs.new_tag }}"
 
       - name: Upload Release Asset
         env:
