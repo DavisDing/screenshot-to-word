@@ -18,7 +18,7 @@ jobs:
 
       # 替换原来的 Get latest tag 和 Calculate new tag 步骤
       - name: Auto Tag
-        uses: mathieudutour/github-tag-action@v6
+        uses: mathieudutour/github-tag-action@v6.2
         id: auto-tag
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
