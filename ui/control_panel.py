@@ -162,7 +162,7 @@ class ControlPanel(tk.Toplevel):
             if not img_path:
                 self.logger.log("截图失败或取消")
                 self.screenshot_done_event.set()
-                self.root.after(0, self.deiconify)  # 显示控制面板
+                self.root.after(0, self._restore_control_panel)
                 return
 
             # 标注
@@ -170,7 +170,7 @@ class ControlPanel(tk.Toplevel):
             if not annotated_path:
                 self.logger.log("标注取消或失败")
                 self.screenshot_done_event.set()
-                self.root.after(0, self.deiconify)  # 显示控制面板
+                self.root.after(0, self._restore_control_panel)
                 return
 
             # 步骤说明
@@ -188,11 +188,15 @@ class ControlPanel(tk.Toplevel):
             self.screenshot_done_event.set()
             self.logger.log("screenshot_done_event.set() 已调用")
             self.root.after(0, lambda: self.btn_complete.config(state="normal"))
-            self.root.after(0, self.deiconify)  # 截图完成后恢复控制面板显示
+            self.root.after(0, self._restore_control_panel)
 
         self.screenshot_done_event.clear()
         self.withdraw()  # 隐藏控制面板
         threading.Thread(target=run_screenshot_flow, daemon=True).start()
+
+    def _restore_control_panel(self):
+        self.deiconify()
+        self.attributes('-topmost', True)
 
     def on_complete(self):
         if self.is_step_mode and self.current_step_index == len(self.current_case_steps) - 1:
