@@ -191,6 +191,7 @@ class ControlPanel(tk.Toplevel):
             self.root.after(0, self._restore_control_panel)
 
         self.screenshot_done_event.clear()
+        self.attributes("-topmost", False)  # 取消置顶，防止截图残留
         self.withdraw()  # 隐藏控制面板
         threading.Thread(target=run_screenshot_flow, daemon=True).start()
 
