@@ -57,15 +57,14 @@ class ControlPanel(tk.Toplevel):
         self.btn_screenshot.grid(row=0, column=0, padx=5)
         keyboard.add_hotkey('f8', self.on_screenshot)
 
-        self.btn_complete = tk.Button(btn_frame, text="完成", command=self.on_complete)
-        self.btn_complete.grid(row=0, column=1, padx=5)
-
         self.btn_skip = tk.Button(btn_frame, text="跳过", command=self.on_skip)
-        self.btn_skip.grid(row=0, column=2, padx=5)
+        self.btn_skip.grid(row=0, column=1, padx=5)
 
         self.btn_next = tk.Button(btn_frame, text="下一步", command=self.on_next_step)
-        self.btn_next.grid(row=0, column=3, padx=5)
+        self.btn_next.grid(row=0, column=2, padx=5)
 
+        self.btn_complete = tk.Button(btn_frame, text="完成", command=self.on_complete)
+        self.btn_complete.grid(row=0, column=3, padx=5)
         # 信息显示区域（底部）
         info_frame = tk.Frame(self)
         info_frame.pack(pady=10, padx=10, fill="both", expand=True)
