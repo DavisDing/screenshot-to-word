@@ -26,7 +26,7 @@ class DesktopTestToolApp:
         except Exception as e:
             self.logger.log(f"初始化目录异常：{e}")
 
-        self.excel_handler = ExcelHandler(self.logger, input_dir=self.base_path + "/excel_input", root=self.root)
+        self.excel_handler = ExcelHandler(self.logger, input_dir=os.path.join(self.base_path, "excel_input"), root=self.root)
         self.test_runner = TestRunner(self.logger, self.excel_handler, self.root)
 
         self.create_main_ui()

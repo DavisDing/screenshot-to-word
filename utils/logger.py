@@ -20,10 +20,15 @@ class Logger:
         timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         full_msg = f"[{timestamp}] {msg}"
 
-        self.text_area.configure(state="normal")
-        self.text_area.insert(tk.END, full_msg + '\n')
-        self.text_area.configure(state="disabled")
-        self.text_area.yview(tk.END)
+        def _update_ui():
+            if self.text_area.winfo_exists():
+                self.text_area.configure(state="normal")
+                self.text_area.insert(tk.END, full_msg + '\n')
+                self.text_area.configure(state="disabled")
+                self.text_area.yview(tk.END)
+
+        if self.root:
+            self.root.after(0, _update_ui)
 
         try:
             with open(self.log_path, "a", encoding="utf-8") as f:

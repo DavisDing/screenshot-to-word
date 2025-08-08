@@ -31,24 +31,23 @@ class ScreenshotTool:
             self.logger.log(f"截图失败：{e}")
             return None
 
-    def annotate(self, image_path):
+    def annotate(self, image_path, done_event):
         """
-        弹出标注窗口，阻塞等待用户操作完成后返回最终图片路径
+        在UI主线程中弹出标注窗口.
+        用户关闭窗口后，通过 done_event 通知调用方.
         """
-        result = {'done': False}
+        self.logger.log("弹出标注窗口")
 
-        def run_annotator():
-            annotator = Annotator(self.root, image_path)
-            annotator.grab_set()
-            annotator.wait_window()
-            result['done'] = True
+        def on_annotator_close():
+            self.logger.log("标注窗口关闭")
+            done_event.set()
 
-        thread = threading.Thread(target=run_annotator)
-        thread.start()
-        # 等待标注完成
-        while not result['done']:
-            self.root.update()
-            time.sleep(0.05)
-
-        self.logger.log(f"标注完成：{image_path}")
-        return image_path
+        try:
+            if self.root.winfo_exists():
+                annotator = Annotator(self.root, image_path, on_close_callback=on_annotator_close)
+                annotator.grab_set()
+            else:
+                done_event.set()
+        except Exception as e:
+            self.logger.log(f"创建标注窗口失败: {e}")
+            done_event.set()

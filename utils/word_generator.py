@@ -46,6 +46,10 @@ class WordGenerator:
             self._show_error(f"写入Word文件失败：{e}")
 
     def _show_error(self, msg):
-        self.root.attributes('-topmost', True)
-        messagebox.showerror("错误", msg, parent=self.root)
-        self.root.attributes('-topmost', False)
+        def _task():
+            if self.root.winfo_exists():
+                self.root.attributes('-topmost', True)
+                messagebox.showerror("错误", msg, parent=self.root)
+                self.root.attributes('-topmost', False)
+        if self.root:
+            self.root.after(0, _task)
