@@ -4,6 +4,7 @@ import tkinter as tk
 from tkinter import messagebox
 import threading
 import time
+import keyboard
 from core.screenshot import ScreenshotTool
 from utils.word_generator import WordGenerator
 
@@ -54,7 +55,7 @@ class ControlPanel(tk.Toplevel):
 
         self.btn_screenshot = tk.Button(btn_frame, text="截图 (F8)", command=self.on_screenshot)
         self.btn_screenshot.grid(row=0, column=0, padx=5)
-        self.bind_all("<F8>", lambda event: self.on_screenshot())
+        keyboard.add_hotkey('f8', self.on_screenshot)
 
         self.btn_complete = tk.Button(btn_frame, text="完成", command=self.on_complete)
         self.btn_complete.grid(row=0, column=1, padx=5)
@@ -252,6 +253,11 @@ class ControlPanel(tk.Toplevel):
         self.screenshot_done_event.clear()
 
     def finish_all_cases(self):
+        try:
+            keyboard.remove_hotkey('f8')
+            self.logger.log("F8快捷键已移除")
+        except Exception as e:
+            self.logger.log(f"移除F8快捷键失败: {e}")
         self.root.attributes('-topmost', True)
         messagebox.showinfo("完成", "所有用例已执行完毕", parent=self.root)
         self.root.attributes('-topmost', False)
@@ -261,6 +267,11 @@ class ControlPanel(tk.Toplevel):
     def on_exit(self):
         self.root.attributes('-topmost', True)
         if messagebox.askokcancel("退出", "确定退出测试？", parent=self.root):
+            try:
+                keyboard.remove_hotkey('f8')
+                self.logger.log("F8快捷键已移除")
+            except Exception as e:
+                self.logger.log(f"移除F8快捷键失败: {e}")
             self.root.attributes('-topmost', False)
             self.root.destroy()
             self.destroy()
