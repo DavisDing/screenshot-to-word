@@ -2,6 +2,7 @@ import pandas as pd
 from openpyxl import load_workbook
 import os
 from tkinter import filedialog, messagebox
+import threading
 
 class ExcelHandler:
     def __init__(self, logger, input_dir, root):
@@ -14,44 +15,68 @@ class ExcelHandler:
         self.result_col_index = None
 
     def _show_error(self, msg: str):
-        self.root.attributes('-topmost', True)
-        messagebox.showerror("错误", msg, parent=self.root)
-        self.root.attributes('-topmost', False)
+        def _task():
+            if self.root.winfo_exists():
+                self.root.attributes('-topmost', True)
+                messagebox.showerror("错误", msg, parent=self.root)
+                self.root.attributes('-topmost', False)
+        if self.root:
+            self.root.after(0, _task)
 
     def _show_info(self, msg: str):
-        self.root.attributes('-topmost', True)
-        messagebox.showinfo("提示", msg, parent=self.root)
-        self.root.attributes('-topmost', False)
+        def _task():
+            if self.root.winfo_exists():
+                self.root.attributes('-topmost', True)
+                messagebox.showinfo("提示", msg, parent=self.root)
+                self.root.attributes('-topmost', False)
+        if self.root:
+            self.root.after(0, _task)
 
     def select_excel_file(self) -> bool:
-        try:
-            files = [f for f in os.listdir(self.input_dir) if f.lower().endswith('.xlsx')]
-            if not files:
-                self._show_error("excel_input 目录下未找到 Excel 文件")
-                self.logger.log("excel_input目录无Excel文件")
-                return False
+        # This function is called from a background thread, but needs to run UI code.
+        # We use an event to wait for the UI thread to finish its work.
+        result = {'path': None}
+        done_event = threading.Event()
 
-            if len(files) == 1:
-                self.file_path = os.path.join(self.input_dir, files[0])
-                self.logger.log(f"自动选中Excel文件：{files[0]}")
-            else:
-                self.root.attributes('-topmost', True)
-                self.file_path = filedialog.askopenfilename(
-                    title="请选择要执行的 Excel 文件",
-                    initialdir=self.input_dir,
-                    filetypes=[("Excel 文件", "*.xlsx")],
-                    parent=self.root
-                )
-                self.root.attributes('-topmost', False)
-                if self.file_path:
-                    self.logger.log(f"用户选择Excel文件：{os.path.basename(self.file_path)}")
+        def _task_on_main_thread():
+            try:
+                if not self.root.winfo_exists():
+                    done_event.set()
+                    return
+
+                files = [f for f in os.listdir(self.input_dir) if f.lower().endswith('.xlsx')]
+                if not files:
+                    self._show_error("excel_input 目录下未找到 Excel 文件")
+                    self.logger.log("excel_input目录无Excel文件")
+                    done_event.set()
+                    return
+
+                if len(files) == 1:
+                    result['path'] = os.path.join(self.input_dir, files[0])
                 else:
-                    self.logger.log("用户取消选择Excel文件")
-                    return False
+                    self.root.attributes('-topmost', True)
+                    result['path'] = filedialog.askopenfilename(
+                        title="请选择要执行的 Excel 文件",
+                        initialdir=self.input_dir,
+                        filetypes=[("Excel 文件", "*.xlsx")],
+                        parent=self.root
+                    )
+                    self.root.attributes('-topmost', False)
+            except Exception as e:
+                self._show_error(f"选择Excel文件异常：{e}")
+                self.logger.log(f"选择Excel文件异常：{e}")
+            finally:
+                done_event.set()
+
+        self.root.after(0, _task_on_main_thread)
+        done_event.wait()
+
+        if result['path']:
+            self.file_path = result['path']
+            self.logger.log(f"选中Excel文件：{os.path.basename(self.file_path)}")
             return True
-        except Exception as e:
-            self._show_error(f"选择Excel文件异常：{e}")
-            self.logger.log(f"选择Excel文件异常：{e}")
+        else:
+            self.logger.log("未选择Excel文件或出现异常")
             return False
 
     def load_excel(self) -> bool:
@@ -128,6 +153,7 @@ class ExcelHandler:
     def get_step_cases(self):
         from collections import defaultdict
         case_dict = defaultdict(list)
+        current_test, current_check = "", ""
         for idx, row in self.df.iterrows():
             if pd.notna(row['测试名称']) or pd.notna(row['验证点']):
                 current_test = str(row['测试名称']).strip()

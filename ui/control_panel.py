@@ -167,12 +167,14 @@ class ControlPanel(tk.Toplevel):
                 return
 
             # 标注
-            annotated_path = self.screenshot_tool.annotate(img_path)
-            if not annotated_path:
-                self.logger.log("标注取消或失败")
-                self.screenshot_done_event.set()
-                self.root.after(0, self._restore_control_panel)
-                return
+            annotation_done_event = threading.Event()
+            self.root.after(0, lambda: self.screenshot_tool.annotate(img_path, annotation_done_event))
+
+            self.logger.log("等待用户标注...")
+            annotation_done_event.wait() # 阻塞等待标注完成
+            self.logger.log("用户标注完成")
+
+            annotated_path = img_path # 路径不变，但内容已更新
 
             # 步骤说明
             step_note = ""

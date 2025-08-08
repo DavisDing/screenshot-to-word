@@ -6,10 +6,11 @@ from PIL import Image, ImageTk, ImageDraw
 import os
 
 class Annotator(tk.Toplevel):
-    def __init__(self, root, image_path):
+    def __init__(self, root, image_path, on_close_callback=None):
         super().__init__(root)
         self.root = root
         self.image_path = image_path
+        self.on_close_callback = on_close_callback
         self.title("截图标注")
         self.attributes("-topmost", True)
         self.protocol("WM_DELETE_WINDOW", self.on_close)
@@ -90,15 +91,20 @@ class Annotator(tk.Toplevel):
 
         # 保存覆盖原文件
         final_img.save(self.image_path)
-        self.destroy()
+        self._close_window()
 
     def on_escape(self, event=None):
         self.root.attributes('-topmost', True)
         if messagebox.askyesno("确认", "是否保存标注后退出？", parent=self):
             self.on_save()
         else:
-            self.destroy()
+            self._close_window()
         self.root.attributes('-topmost', False)
 
     def on_close(self):
         self.on_escape()
+
+    def _close_window(self):
+        if self.on_close_callback:
+            self.on_close_callback()
+        self.destroy()
