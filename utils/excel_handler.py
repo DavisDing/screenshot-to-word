@@ -96,13 +96,40 @@ class ExcelHandler:
 
     def get_pending_cases(self):
         self.logger.log("开始获取未执行用例")
-        for idx, row in self.df.iterrows():
-            status = str(row['测试结果']).strip().lower() if pd.notna(row['测试结果']) else ''
-            if status not in ['已执行', 'pass', 'passed']:
-                filename = str(row['测试名称']).strip() if pd.notna(row['测试名称']) else ''
-                checkpoint = str(row['验证点']).strip() if pd.notna(row['验证点']) else ''
-                self.logger.log(f"待执行用例: 行={idx}, 用例名={filename}, 验证点={checkpoint}")
-                yield idx, filename, checkpoint
+
+        if self.version == "步骤版":
+            from collections import defaultdict
+            case_group = defaultdict(list)
+
+            last_test_name = ""
+            last_checkpoint = ""
+
+            # 分组：按测试名称+验证点
+            for idx, row in self.df.iterrows():
+                test_name = str(row['测试名称']).strip() if pd.notna(row['测试名称']) and row['测试名称'] != '' else last_test_name
+                checkpoint = str(row['验证点']).strip() if pd.notna(row['验证点']) and row['验证点'] != '' else last_checkpoint
+                last_test_name, last_checkpoint = test_name, checkpoint
+
+                key = (test_name, checkpoint)
+                status = str(row['测试结果']).strip().lower() if pd.notna(row['测试结果']) else ''
+                case_group[key].append((idx, status))
+
+            for (test_name, check_point), items in case_group.items():
+                all_status = [s for _, s in items]
+                if all(s in ['已执行', 'pass', 'passed'] for s in all_status):
+                    self.logger.log(f"用例已完成: {test_name}-{check_point}")
+                    continue
+                first_index = items[0][0]
+                self.logger.log(f"待执行用例: 行={first_index}, 用例名={test_name}, 验证点={check_point}")
+                yield first_index, test_name, check_point
+        else:
+            for idx, row in self.df.iterrows():
+                status = str(row['测试结果']).strip().lower() if pd.notna(row['测试结果']) else ''
+                if status not in ['已执行', 'pass', 'passed']:
+                    filename = str(row['测试名称']).strip() if pd.notna(row['测试名称']) else ''
+                    checkpoint = str(row['验证点']).strip() if pd.notna(row['验证点']) else ''
+                    self.logger.log(f"待执行用例: 行={idx}, 用例名={filename}, 验证点={checkpoint}")
+                    yield idx, filename, checkpoint
 
     def mark_case_executed(self, index: int):
         # 内存中DataFrame更新
