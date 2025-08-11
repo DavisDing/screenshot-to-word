@@ -2,7 +2,7 @@
 
 import tkinter as tk
 from tkinter import simpledialog, messagebox
-from PIL import Image, ImageTk, ImageDraw
+from PIL import Image, ImageTk, ImageDraw, ImageFont
 import os
 
 class Annotator(tk.Toplevel):
@@ -81,13 +81,19 @@ class Annotator(tk.Toplevel):
         final_img = self.original_image.copy()
         draw = ImageDraw.Draw(final_img)
 
+        # 尝试加载Arial字体，大小设置为16，如果失败则使用默认字体
+        try:
+            font = ImageFont.truetype("arial.ttf", 16)
+        except IOError:
+            font = ImageFont.load_default()
+
         for shape in self.shapes:
             if shape[0] == 'circle':
                 x1, y1, x2, y2 = shape[1]
                 draw.ellipse([x1, y1, x2, y2], outline="red", width=3)
             elif shape[0] == 'text':
                 x, y, text = shape[1]
-                draw.text((x, y), text, fill="blue")
+                draw.text((x, y), text, fill="blue", font=font)
 
         # 保存覆盖原文件
         final_img.save(self.image_path)
