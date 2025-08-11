@@ -44,6 +44,7 @@ class Annotator(tk.Toplevel):
         self.bind("<Escape>", self.on_escape)
 
         self.focus_set()
+        self.save_result = False
 
     def on_left_button_down(self, event):
         self.start_x, self.start_y = event.x, event.y
@@ -90,6 +91,7 @@ class Annotator(tk.Toplevel):
 
         # 保存覆盖原文件
         final_img.save(self.image_path)
+        self.save_result = True
         self.destroy()
 
     def on_escape(self, event=None):
@@ -97,8 +99,10 @@ class Annotator(tk.Toplevel):
         if messagebox.askyesno("确认", "是否保存标注后退出？", parent=self):
             self.on_save()
         else:
+            self.save_result = False
             self.destroy()
         self.root.attributes('-topmost', False)
 
     def on_close(self):
-        self.on_escape()
+        self.save_result = False
+        self.destroy()

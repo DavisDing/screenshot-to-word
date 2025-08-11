@@ -40,6 +40,12 @@ class TestRunner:
                 self.root.withdraw()
                 self.control_panel.deiconify()
                 self.control_panel.grab_set()
+                # 添加对 Annotator 标注结果的判断
+                if hasattr(self.control_panel, 'annotator'):
+                    annotator = self.control_panel.annotator
+                    if not getattr(annotator, "save_result", False):
+                        self.logger.log("用户选择不保存标注，跳过当前步骤/用例。")
+                        return
                 return
 
             self.pending_cases = list(self.excel_handler.get_pending_cases())
@@ -57,6 +63,12 @@ class TestRunner:
             self.control_panel = ControlPanel(self.logger, self.pending_cases, self.excel_handler, self.root)
             self.control_panel.deiconify()
             self.control_panel.grab_set()
+            # 添加对 Annotator 标注结果的判断
+            if hasattr(self.control_panel, 'annotator'):
+                annotator = self.control_panel.annotator
+                if not getattr(annotator, "save_result", False):
+                    self.logger.log("用户选择不保存标注，跳过当前步骤/用例。")
+                    return
         except Exception as e:
             self.logger.log(f"测试运行异常：{e}")
             self.root.attributes('-topmost', True)
