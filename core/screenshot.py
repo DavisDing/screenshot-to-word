@@ -32,23 +32,25 @@ class ScreenshotTool:
             return None
 
     def annotate(self, image_path):
-        """
-        弹出标注窗口，阻塞等待用户操作完成后返回最终图片路径
-        """
-        result = {'done': False}
+        result = {'done': False, 'annotator': None}
 
         def run_annotator():
             annotator = Annotator(self.root, image_path)
             annotator.grab_set()
             annotator.wait_window()
+            result['annotator'] = annotator
             result['done'] = True
 
         thread = threading.Thread(target=run_annotator)
         thread.start()
-        # 等待标注完成
         while not result['done']:
             self.root.update()
             time.sleep(0.05)
+
+        annotator = result.get('annotator')
+        if annotator and not getattr(annotator, 'save_result', True):
+            self.logger.log("用户选择不保存标注，返回 None")
+            return None
 
         self.logger.log(f"标注完成：{image_path}")
         return image_path
