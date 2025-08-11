@@ -35,16 +35,18 @@ class TestRunner:
                 filtered_cases = {k: v for k, v in all_step_cases.items() if k in pending_keys}
 
                 self.logger.log(f"步骤版待执行用例组数：{len(filtered_cases)}")
-                from ui.control_panel import ControlPanel
                 self.control_panel = ControlPanel(self.logger, filtered_cases, self.excel_handler, self.root, is_step_mode=True)
                 self.root.withdraw()
                 self.control_panel.deiconify()
                 self.control_panel.grab_set()
-                # 添加对 Annotator 标注结果的判断
+                # 等待control_panel窗口关闭后再判断保存结果
+                self.control_panel.wait_window()
+                # 修改: 通过control_panel获取annotator对象
                 if hasattr(self.control_panel, 'annotator'):
                     annotator = self.control_panel.annotator
                     if not getattr(annotator, "save_result", False):
                         self.logger.log("用户选择不保存标注，跳过当前步骤/用例。")
+                        self.root.deiconify()
                         return
                 return
 
@@ -59,15 +61,18 @@ class TestRunner:
             self.logger.log(f"共加载 {len(self.pending_cases)} 条待执行用例")
             self.root.withdraw()
 
-            from ui.control_panel import ControlPanel
             self.control_panel = ControlPanel(self.logger, self.pending_cases, self.excel_handler, self.root)
             self.control_panel.deiconify()
             self.control_panel.grab_set()
-            # 添加对 Annotator 标注结果的判断
+            # 等待control_panel窗口关闭后再判断保存结果
+            self.control_panel.wait_window()
+            
+            # 修改: 将annotator.save_result检查移到wait_window之后
             if hasattr(self.control_panel, 'annotator'):
                 annotator = self.control_panel.annotator
                 if not getattr(annotator, "save_result", False):
                     self.logger.log("用户选择不保存标注，跳过当前步骤/用例。")
+                    self.root.deiconify()
                     return
         except Exception as e:
             self.logger.log(f"测试运行异常：{e}")
