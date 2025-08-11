@@ -23,7 +23,6 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           tag_prefix: "v"  # 可选：如果你想要 v1.0.0 而不是 1.0.0
-          default_semver: "v1.0.0"  # 如果没有现有标签时的默认版本
 
       - name: Set up Python
         uses: actions/setup-python@v5

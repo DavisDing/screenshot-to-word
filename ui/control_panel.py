@@ -73,7 +73,7 @@ class ControlPanel(tk.Toplevel):
             label = tk.Label(info_frame, text=label_text, anchor="w", font=("Arial", 10, "bold"))
             label.grid(row=add_row.row_index, column=0, sticky="nw", padx=5, pady=2)
             value_label = tk.Label(info_frame, text="", anchor="w", wraplength=360, justify="left")
-            value_label.grid(row=add_row.row_index, column=1, sticky="nw", padx=(5, 10), pady=2)
+            value_label.grid(row=add_row.row_index, column=1, sticky="ew", padx=(10, 20), pady=2)
             setattr(self, attr_name, value_label)
             add_row.row_index += 1
 
