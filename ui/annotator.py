@@ -3,7 +3,16 @@
 import tkinter as tk
 from tkinter import simpledialog, messagebox
 from PIL import Image, ImageTk, ImageDraw, ImageFont
+import sys
 import os
+
+# 跨平台中文字体名
+if sys.platform.startswith("win"):
+    default_font_name = "微软雅黑"
+elif sys.platform.startswith("darwin"):
+    default_font_name = "STHeiti"
+else:
+    default_font_name = "WenQuanYi Micro Hei"
 
 class Annotator(tk.Toplevel):
     def __init__(self, root, image_path):
@@ -67,7 +76,7 @@ class Annotator(tk.Toplevel):
     def on_right_click(self, event):
         text = simpledialog.askstring("输入文本", "请输入标注文字：", parent=self)
         if text:
-            item = self.canvas.create_text(event.x, event.y, text=text, fill="blue", font=("Arial", 14))
+            item = self.canvas.create_text(event.x, event.y, text=text, fill="blue", font=(default_font_name, 16))
             self.shapes.append(('text', (event.x, event.y, text), item))
 
     def on_undo(self, event=None):
@@ -81,10 +90,16 @@ class Annotator(tk.Toplevel):
         final_img = self.original_image.copy()
         draw = ImageDraw.Draw(final_img)
 
-        # 尝试加载Arial字体，大小设置为16，如果失败则使用默认字体
+        # 跨平台加载支持中文的字体，优先使用常见系统字体，否则降级为默认字体
         try:
-            font = ImageFont.truetype("arial.ttf", 16)
-        except IOError:
+            if sys.platform.startswith("win"):
+                font_path = os.path.join("C:\\Windows\\Fonts", "msyh.ttc")
+            elif sys.platform.startswith("darwin"):
+                font_path = "/System/Library/Fonts/STHeiti Medium.ttc"  # macOS黑体字体路径示例
+            else:
+                font_path = "/usr/share/fonts/truetype/arphic/ukai.ttc"  # Linux下常见中文字体路径示例
+            font = ImageFont.truetype(font_path, 18)
+        except Exception:
             font = ImageFont.load_default()
 
         for shape in self.shapes:
