@@ -66,11 +66,11 @@ class TestRunner:
             self.control_panel.grab_set()
             # 等待control_panel窗口关闭后再判断保存结果
             self.control_panel.wait_window()
-            
-            # 修改: 将annotator.save_result检查移到wait_window之后
+
             if hasattr(self.control_panel, 'annotator'):
                 annotator = self.control_panel.annotator
-                if not getattr(annotator, "save_result", False):
+                # 当save_result为False或None时，跳过当前截图处理，直接返回控制面板
+                if not getattr(annotator, "save_result", True):
                     self.logger.log("用户选择不保存标注，跳过当前步骤/用例。")
                     self.root.deiconify()
                     return
