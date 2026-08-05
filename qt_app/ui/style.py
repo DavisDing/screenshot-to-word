@@ -138,4 +138,27 @@ QToolButton:checked {{
     border-color: #2563eb;
     color: #1d4ed8;
 }}
+QFrame#MappingRow {{
+    background: #f8fafc;
+    border: 1px solid #edf2f7;
+    border-radius: 10px;
+}}
+QFrame#MappingRow:hover {{
+    background: #f1f7ff;
+    border-color: #bfdbfe;
+}}
+QLabel#MappingField {{
+    color: #0f172a;
+    font-size: 13px;
+    font-weight: 700;
+}}
+QLabel#InlineHint {{
+    color: #64748b;
+    background: #f8fafc;
+    border: 1px dashed #dbe3ef;
+    border-radius: 10px;
+    padding: 8px 10px;
+    font-size: 12px;
+}}
+
 """

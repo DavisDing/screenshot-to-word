@@ -41,6 +41,7 @@ class MainWindow(QMainWindow):
         self.excel_service = ExcelService(self.logger)
         self.screenshot_service = ScreenshotService(self.base_path / "Temp", self.logger)
         self.word_service = WordService(self.base_path / "word_output", self.logger)
+        self.control_panel = None
         icon = app_icon()
         if not icon.isNull():
             self.setWindowIcon(icon)
@@ -218,23 +219,26 @@ class MainWindow(QMainWindow):
             self.logger.log("[完成] 没有待执行用例")
             return
 
+        # 执行期间主窗口保持隐藏，避免在截图时进入画面；测试结束后再恢复。
         self.hide()
-        try:
-            panel = ControlWindow(
-                items,
-                self.excel_service,
-                self.screenshot_service,
-                self.word_service,
-                self.logger,
-                parent=None,
-                owner_window=self,
-            )
-            panel.exec()
-        finally:
-            self.setWindowOpacity(1.0)
-            self.show()
-            self.raise_()
-            self.activateWindow()
+        self.control_panel = ControlWindow(
+            items,
+            self.excel_service,
+            self.screenshot_service,
+            self.word_service,
+            self.logger,
+            parent=None,
+            owner_window=self,
+        )
+        self.control_panel.finished.connect(self._restore_after_control_panel)
+        self.control_panel.show()
+
+    def _restore_after_control_panel(self, *_args) -> None:
+        self.control_panel = None
+        self.setWindowOpacity(1.0)
+        self.show()
+        self.raise_()
+        self.activateWindow()
 
     def open_dir(self, path: Path) -> None:
         path.mkdir(parents=True, exist_ok=True)

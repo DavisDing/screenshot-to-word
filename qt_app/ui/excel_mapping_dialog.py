@@ -2,20 +2,21 @@ from __future__ import annotations
 
 from typing import Dict, Optional
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEvent, Qt
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
     QFrame,
-    QGridLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QMessageBox,
     QTableWidget,
+    QToolTip,
     QTableWidgetItem,
     QVBoxLayout,
+    QWidget,
 )
 
 from qt_app.services.excel_service import ExcelPreview, REQUIRED_ROLES
@@ -24,15 +25,18 @@ from utils.excel_schema import FIELD_SPECS
 
 
 class ExcelMappingDialog(QDialog):
+    DEFAULT_HINT = "把鼠标移动到左侧字段或下拉框，可查看字段说明和自动识别依据。"
+
     def __init__(self, preview: ExcelPreview, parent=None):
         super().__init__(parent)
         self.preview = preview
+        self.combos: Dict[str, QComboBox] = {}
+        self._hover_hints: Dict[QWidget, str] = {}
         icon = app_icon()
         if not icon.isNull():
             self.setWindowIcon(icon)
         self.setWindowTitle("确认 Excel 列含义")
-        self.resize(960, 600)
-        self.combos: Dict[str, QComboBox] = {}
+        self.resize(980, 600)
         self._build_ui()
 
     def mapping(self) -> Dict[str, Optional[str]]:
@@ -41,6 +45,19 @@ class ExcelMappingDialog(QDialog):
             text = combo.currentText()
             result[role] = None if text.startswith("不使用") else text
         return result
+
+    def eventFilter(self, watched, event):  # noqa: N802 - Qt API
+        hint = self._hover_hints.get(watched)
+        if hint and hasattr(self, "hint_label"):
+            if event.type() == QEvent.Type.Enter:
+                self.hint_label.setText(hint)
+            elif event.type() == QEvent.Type.ToolTip and hasattr(event, "globalPos"):
+                self.hint_label.setText(hint)
+                QToolTip.showText(event.globalPos(), hint, watched)
+                return True
+            elif event.type() == QEvent.Type.Leave:
+                self.hint_label.setText(self.DEFAULT_HINT)
+        return super().eventFilter(watched, event)
 
     def accept(self) -> None:
         mapping = self.mapping()
@@ -71,43 +88,86 @@ class ExcelMappingDialog(QDialog):
         body.setSpacing(12)
         root.addLayout(body, stretch=1)
 
+        body.addWidget(self._build_mapping_card(), stretch=2)
+        body.addWidget(self._build_preview_card(), stretch=5)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText("确认")
+        buttons.button(QDialogButtonBox.StandardButton.Cancel).setText("取消")
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        root.addWidget(buttons)
+
+    def _build_mapping_card(self) -> QFrame:
         mapping_card = QFrame()
         mapping_card.setObjectName("Card")
-        mapping_layout = QGridLayout(mapping_card)
-        mapping_layout.setContentsMargins(16, 14, 16, 14)
-        mapping_layout.setHorizontalSpacing(10)
-        mapping_layout.setVerticalSpacing(9)
-        field_head = QLabel("字段")
-        field_head.setObjectName("MutedLabel")
-        column_head = QLabel("对应 Excel 列")
-        column_head.setObjectName("MutedLabel")
-        mapping_layout.addWidget(field_head, 0, 0)
-        mapping_layout.addWidget(column_head, 0, 1)
+        mapping_card.setMinimumWidth(340)
+        mapping_card.setMaximumWidth(430)
+        outer = QVBoxLayout(mapping_card)
+        outer.setContentsMargins(14, 12, 14, 12)
+        outer.setSpacing(8)
+
+        header = QHBoxLayout()
+        title = QLabel("字段映射（* 必填）")
+        title.setObjectName("SectionTitle")
+        header.addWidget(title)
+        header.addStretch(1)
+        outer.addLayout(header)
 
         headers = [c.header for c in self.preview.columns]
         options = ["不使用"] + headers
-        for row, (role, spec) in enumerate(FIELD_SPECS.items(), start=1):
-            required = " *" if role in REQUIRED_ROLES else ""
+        for role, spec in FIELD_SPECS.items():
+            required = role in REQUIRED_ROLES
             reason = self.preview.reasons.get(role, "")
-            tooltip = f"{spec.help_text}\n{reason}".strip()
-            label = QLabel(f"{spec.label}{required}")
-            label.setToolTip(tooltip)
+            hint = f"{spec.label}：{spec.help_text}"
+            if reason:
+                hint += f"\n识别依据：{reason}"
+            row = QFrame()
+            row.setObjectName("MappingRow")
+            row.setToolTip(hint)
+            row.installEventFilter(self)
+            self._hover_hints[row] = hint
+            row_layout = QHBoxLayout(row)
+            row_layout.setContentsMargins(10, 7, 10, 7)
+            row_layout.setSpacing(10)
+
+            label_text = spec.label + (" *" if required else "")
+            label = QLabel(label_text)
+            label.setObjectName("MappingField")
+            label.setFixedWidth(72)
+            label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+            label.setToolTip(hint)
             label.setCursor(Qt.CursorShape.WhatsThisCursor)
+            label.installEventFilter(self)
+            self._hover_hints[label] = hint
+
             combo = QComboBox()
             combo.setObjectName("MinimalCombo")
-            combo.setMinimumHeight(36)
+            combo.setMinimumHeight(34)
             combo.setMaxVisibleItems(12)
             combo.addItems(options)
-            combo.setToolTip(tooltip)
+            combo.setToolTip(hint)
+            combo.setCursor(Qt.CursorShape.PointingHandCursor)
+            combo.installEventFilter(self)
+            self._hover_hints[combo] = hint
             suggested = self.preview.suggested_mapping.get(role)
             if suggested in headers:
                 combo.setCurrentText(suggested)
-            mapping_layout.addWidget(label, row, 0, alignment=Qt.AlignmentFlag.AlignVCenter)
-            mapping_layout.addWidget(combo, row, 1)
-            self.combos[role] = combo
-        mapping_layout.setColumnStretch(1, 1)
-        body.addWidget(mapping_card, stretch=3)
 
+            row_layout.addWidget(label)
+            row_layout.addWidget(combo, stretch=1)
+            outer.addWidget(row)
+            self.combos[role] = combo
+
+        self.hint_label = QLabel(self.DEFAULT_HINT)
+        self.hint_label.setObjectName("InlineHint")
+        self.hint_label.setWordWrap(True)
+        self.hint_label.setMinimumHeight(42)
+        outer.addWidget(self.hint_label)
+        outer.addStretch(1)
+        return mapping_card
+
+    def _build_preview_card(self) -> QFrame:
         preview_card = QFrame()
         preview_card.setObjectName("Card")
         preview_layout = QVBoxLayout(preview_card)
@@ -130,11 +190,4 @@ class ExcelMappingDialog(QDialog):
             table.setItem(row, 1, QTableWidgetItem(col.header))
             table.setItem(row, 2, QTableWidgetItem(" / ".join(col.samples)))
         preview_layout.addWidget(table)
-        body.addWidget(preview_card, stretch=4)
-
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        buttons.button(QDialogButtonBox.StandardButton.Ok).setText("确认")
-        buttons.button(QDialogButtonBox.StandardButton.Cancel).setText("取消")
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        root.addWidget(buttons)
+        return preview_card

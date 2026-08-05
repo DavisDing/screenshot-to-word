@@ -162,6 +162,21 @@ class ControlWindow(QDialog):
         geo = screen.availableGeometry()
         self.move(geo.right() - self.width() - 24, geo.bottom() - self.height() - 36)
 
+    def _keep_owner_hidden(self) -> None:
+        # 执行期间主窗口不再露出，避免进入截图画面；只在整个执行面板结束后由 MainWindow 恢复。
+        if self.owner_window is not None:
+            self.owner_window.hide()
+
+    def _restore_panel(self) -> None:
+        self._keep_owner_hidden()
+        self.setWindowOpacity(self.PANEL_OPACITY)
+        self.showNormal()
+        self.show()
+        self.adjustSize()
+        self._move_to_bottom_right()
+        self.raise_()
+        self.activateWindow()
+
     def _current(self) -> Optional[TestItem]:
         if 0 <= self.index < len(self.items):
             return self.items[self.index]
@@ -191,36 +206,42 @@ class ControlWindow(QDialog):
         if not item:
             return
         self.logger.log(f"[截图] 开始截图：{item.display_title}")
-        if self.owner_window is not None:
-            self.owner_window.hide()
+        self._keep_owner_hidden()
         self.hide()
-        QTimer.singleShot(300, lambda: self._do_capture(item))
+        # 给系统一点时间真正隐藏窗口，避免主程序或执行面板进入截图。
+        QTimer.singleShot(450, lambda: self._do_capture(item))
 
     def _do_capture(self, item: TestItem) -> None:
+        self._keep_owner_hidden()
         try:
             image_path = self.screenshot_service.capture_fullscreen(item.case_name)
-        finally:
-            self.show()
-            self.setWindowOpacity(self.PANEL_OPACITY)
-            self.raise_()
-            self.activateWindow()
+        except Exception as exc:
+            self.logger.log(f"[错误] 截图失败：{exc}")
+            self._restore_panel()
+            QMessageBox.critical(self, "截图失败", f"无法完成截图：{exc}")
+            return
+        self._keep_owner_hidden()
         if not image_path:
+            self._restore_panel()
             QMessageBox.warning(self, "截图失败", "无法完成截图，请检查系统截图权限。")
             return
 
-        annotator = AnnotatorWindow(image_path, None)
-        result = annotator.exec()
-        if result == QDialog.DialogCode.Accepted and annotator.result_path:
-            self.last_image = annotator.result_path
-            self.finish_btn.setEnabled(True)
-            self.logger.log(f"[标注] 标注完成：{self.last_image}")
-        else:
-            self.logger.log("[标注] 用户取消标注")
-        self.show()
-        self.setWindowOpacity(self.PANEL_OPACITY)
-        self.raise_()
-        self.activateWindow()
-        self._move_to_bottom_right()
+        try:
+            annotator = AnnotatorWindow(image_path, None)
+            result = annotator.exec()
+            if result == QDialog.DialogCode.Accepted and annotator.result_path:
+                self.last_image = annotator.result_path
+                self.finish_btn.setEnabled(True)
+                self.logger.log(f"[标注] 标注完成：{self.last_image}")
+            else:
+                self.logger.log("[标注] 用户取消标注")
+        except Exception as exc:
+            self.logger.log(f"[错误] 标注失败：{exc}")
+            self._restore_panel()
+            QMessageBox.critical(self, "标注失败", str(exc))
+            return
+        # 标注窗口关闭后，下一轮事件循环再恢复执行面板，避免 exec() 收尾阶段抢焦点失败。
+        QTimer.singleShot(0, self._restore_panel)
 
     def finish_current(self) -> None:
         item = self._current()
