@@ -1,9 +1,11 @@
-import tkinter as tk
-from tkinter.scrolledtext import ScrolledText
 import datetime
 import os
-import sys
+import tkinter as tk
+from tkinter import ttk
+from tkinter.scrolledtext import ScrolledText
+
 from utils.path_utils import get_base_path
+
 
 class Logger:
     def __init__(self, root, log_file="logs/output.log"):
@@ -12,8 +14,20 @@ class Logger:
         self.log_path = os.path.join(base_path, log_file)
         os.makedirs(os.path.dirname(self.log_path), exist_ok=True)
 
-        self.text_area = ScrolledText(root, height=6)
-        self.text_area.pack(fill="x", padx=10, pady=10)
+        self.container = ttk.Labelframe(root, text="运行日志", padding=(10, 8))
+        self.container.pack(side="bottom", fill="both", expand=True, padx=24, pady=(0, 18))
+        self.container.columnconfigure(0, weight=1)
+        self.container.rowconfigure(0, weight=1)
+
+        self.text_area = ScrolledText(
+            self.container,
+            height=8,
+            borderwidth=0,
+            relief="flat",
+            font=("Consolas", 10),
+            wrap="word",
+        )
+        self.text_area.grid(row=0, column=0, sticky="nsew")
         self.text_area.configure(state="disabled")
 
     def log(self, msg):

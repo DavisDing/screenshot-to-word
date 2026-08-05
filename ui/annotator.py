@@ -1,7 +1,7 @@
 # ui/annotator.py
 
 import tkinter as tk
-from tkinter import simpledialog, messagebox
+from tkinter import simpledialog, messagebox, ttk
 from PIL import Image, ImageTk, ImageDraw, ImageFont
 import sys
 import os
@@ -29,7 +29,18 @@ class Annotator(tk.Toplevel):
         self.draw_image = self.original_image.copy()
         self.tk_image = ImageTk.PhotoImage(self.draw_image)
 
-        self.canvas = tk.Canvas(self, width=self.tk_image.width(), height=self.tk_image.height(), cursor="cross")
+        toolbar = ttk.Frame(self, padding=(10, 8), style="App.TFrame")
+        toolbar.pack(side="top", fill="x")
+        ttk.Label(
+            toolbar,
+            text="左键拖拽画圈｜右键添加文字｜Ctrl+Z 撤销｜Ctrl+S 保存｜Esc 退出",
+            style="SubHeader.TLabel",
+        ).pack(side="left", padx=(0, 12))
+        ttk.Button(toolbar, text="撤销", command=self.on_undo, style="Secondary.TButton").pack(side="right", padx=(6, 0))
+        ttk.Button(toolbar, text="取消", command=self.on_close, style="Danger.TButton").pack(side="right", padx=(6, 0))
+        ttk.Button(toolbar, text="保存", command=self.on_save, style="Primary.TButton").pack(side="right", padx=(6, 0))
+
+        self.canvas = tk.Canvas(self, width=self.tk_image.width(), height=self.tk_image.height(), cursor="cross", highlightthickness=0)
         self.canvas.pack(fill="both", expand=True)
 
         self.canvas_image = self.canvas.create_image(0, 0, anchor="nw", image=self.tk_image)

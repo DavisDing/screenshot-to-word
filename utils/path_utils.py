@@ -1,8 +1,13 @@
 import os
 import sys
 
+
 def get_base_path():
+    """Return executable directory when packaged, otherwise the project root."""
+    if getattr(sys, "frozen", False):
         return os.path.dirname(sys.executable)
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
 
 def ensure_directories(base_path, logger=None):
     required_dirs = ["excel_input", "word_output", "logs", "Temp"]
