@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import html
 from pathlib import Path
+import html
 
 from PySide6.QtCore import Qt, QUrl
-from PySide6.QtGui import QDesktopServices, QIcon
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QDialog,
     QFileDialog,
@@ -27,6 +27,7 @@ from qt_app.services.screenshot_service import ScreenshotService
 from qt_app.services.word_service import WordService
 from qt_app.ui.control_window import ControlWindow
 from qt_app.ui.excel_mapping_dialog import ExcelMappingDialog
+from qt_app.ui.icons import app_icon
 
 GITHUB_URL = "https://github.com/DavisDing/screenshot-to-word"
 
@@ -40,9 +41,9 @@ class MainWindow(QMainWindow):
         self.excel_service = ExcelService(self.logger)
         self.screenshot_service = ScreenshotService(self.base_path / "Temp", self.logger)
         self.word_service = WordService(self.base_path / "word_output", self.logger)
-        icon_path = self.base_path / "icon.ico"
-        if icon_path.exists():
-            self.setWindowIcon(QIcon(str(icon_path)))
+        icon = app_icon()
+        if not icon.isNull():
+            self.setWindowIcon(icon)
         self.setWindowTitle("Screenshot To Word")
         self.resize(1020, 680)
         self.setMinimumSize(860, 560)
@@ -173,29 +174,16 @@ class MainWindow(QMainWindow):
         return card
 
     def _append_log(self, line: str) -> None:
-        color, badge = self._log_style(line)
+        color = self._log_color(line)
         safe = html.escape(line)
-        self.log_view.append(
-            f'<div style="margin:2px 0; color:#334155;">'
-            f'<span style="display:inline-block; color:white; background:{color}; border-radius:8px; padding:2px 7px; font-weight:700;">{badge}</span> '
-            f'<span>{safe}</span>'
-            f'</div>'
-        )
+        self.log_view.append(f'<div style="margin:2px 0; color:{color};">{safe}</div>')
 
-    def _log_style(self, line: str) -> tuple[str, str]:
+    def _log_color(self, line: str) -> str:
         if any(k in line for k in ("失败", "异常", "错误", "[错误]")):
-            return "#dc2626", "错误"
-        if any(k in line for k in ("[完成]", "完成", "保存", "写入 Word")):
-            return "#16a34a", "完成"
-        if any(k in line for k in ("[截图]", "截图")):
-            return "#2563eb", "截图"
-        if any(k in line for k in ("[标注]", "标注")):
-            return "#7c3aed", "标注"
-        if any(k in line for k in ("Excel", "列映射", "加载")):
-            return "#0891b2", "Excel"
-        if any(k in line for k in ("[启动]", "启动")):
-            return "#475569", "启动"
-        return "#64748b", "信息"
+            return "#dc2626"
+        if any(k in line for k in ("截图", "标注", "Excel", "Word", "完成", "保存")):
+            return "#1e40af"
+        return "#475569"
 
     def select_and_run(self) -> None:
         excel_dir = self.base_path / "excel_input"
@@ -232,7 +220,15 @@ class MainWindow(QMainWindow):
 
         self.hide()
         try:
-            panel = ControlWindow(items, self.excel_service, self.screenshot_service, self.word_service, self.logger, None)
+            panel = ControlWindow(
+                items,
+                self.excel_service,
+                self.screenshot_service,
+                self.word_service,
+                self.logger,
+                parent=None,
+                owner_window=self,
+            )
             panel.exec()
         finally:
             self.setWindowOpacity(1.0)

@@ -27,9 +27,9 @@ def main() -> int:
     ensure_app_dirs(base_path)
 
     try:
-        from PySide6.QtGui import QIcon
         from PySide6.QtWidgets import QApplication, QMessageBox
         from qt_app.services.logger import AppLogger
+        from qt_app.ui.icons import app_icon
         from qt_app.ui.main_window import MainWindow
         from qt_app.ui.style import APP_QSS
     except Exception as exc:  # Dependency/import problems should be diagnosable after packaging.
@@ -39,9 +39,9 @@ def main() -> int:
 
     app = QApplication(sys.argv)
     app.setApplicationName(APP_TITLE)
-    icon_path = base_path / "icon.ico"
-    if icon_path.exists():
-        app.setWindowIcon(QIcon(str(icon_path)))
+    icon = app_icon()
+    if not icon.isNull():
+        app.setWindowIcon(icon)
     app.setStyleSheet(APP_QSS)
     logger = AppLogger(base_path / "logs" / "output.log")
 

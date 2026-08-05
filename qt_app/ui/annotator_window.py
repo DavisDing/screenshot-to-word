@@ -228,9 +228,15 @@ class AnnotationCanvas(QWidget):
         return True
 
 
+from qt_app.ui.icons import app_icon
+
+
 class AnnotatorWindow(QDialog):
     def __init__(self, image_path: Path, parent=None):
         super().__init__(parent)
+        icon = app_icon()
+        if not icon.isNull():
+            self.setWindowIcon(icon)
         self.setWindowTitle("截图标注")
         self.resize(1100, 760)
         self.result_path: Optional[Path] = None

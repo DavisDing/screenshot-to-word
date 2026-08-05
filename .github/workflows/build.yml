@@ -75,6 +75,8 @@ jobs:
             --onefile `
             --windowed `
             --icon=icon.ico `
+            --add-data "icon.ico;." `
+            --add-data "assets;assets" `
             --collect-all PySide6 `
             --collect-all shiboken6
           New-Item -ItemType Directory -Force package | Out-Null
@@ -93,6 +95,8 @@ jobs:
             --clean \
             --windowed \
             --icon=icon.icns \
+            --add-data "icon.ico:." \
+            --add-data "assets:assets" \
             --collect-all PySide6 \
             --collect-all shiboken6
           mkdir -p package/excel_input package/word_output package/logs
