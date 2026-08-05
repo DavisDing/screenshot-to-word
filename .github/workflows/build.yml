@@ -72,7 +72,6 @@ jobs:
             --name "DesktopTestTool" `
             --noconfirm `
             --clean `
-            --onefile `
             --windowed `
             --icon=icon.ico `
             --add-data "icon.ico;." `
@@ -80,7 +79,7 @@ jobs:
             --collect-all PySide6 `
             --collect-all shiboken6
           New-Item -ItemType Directory -Force package | Out-Null
-          Copy-Item dist/DesktopTestTool.exe package/DesktopTestTool.exe
+          Copy-Item dist/DesktopTestTool/* package/ -Recurse -Force
           New-Item -ItemType Directory -Force package/excel_input, package/word_output, package/logs | Out-Null
           Compress-Archive -Path package/* -DestinationPath "${{ matrix.asset_name }}" -Force
 

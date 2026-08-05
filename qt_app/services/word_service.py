@@ -3,9 +3,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from docx import Document
-from docx.shared import Inches
-
 INVALID_FILENAME_CHARS = re.compile(r'[\\/:*?"<>|\r\n\t]+')
 
 
@@ -16,6 +13,10 @@ class WordService:
         self.logger = logger
 
     def add_image(self, case_name: str, checkpoint: str, image_path: Path, step_note: str = "") -> Path:
+        # Lazy import: python-docx is only needed when the user actually finishes a screenshot.
+        from docx import Document
+        from docx.shared import Inches
+
         doc_path = self.output_dir / f"{self._safe_filename(case_name)}.docx"
         if doc_path.exists():
             doc = Document(str(doc_path))

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QKeySequence, QShortcut
@@ -12,17 +12,20 @@ from PySide6.QtWidgets import (
     QLabel,
     QMessageBox,
     QProgressBar,
+    QApplication,
     QPushButton,
     QVBoxLayout,
     QWidget,
 )
 
 from qt_app.models.test_case import TestItem
-from qt_app.services.excel_service import ExcelService
-from qt_app.services.screenshot_service import ScreenshotService
-from qt_app.services.word_service import WordService
 from qt_app.ui.annotator_window import AnnotatorWindow
 from qt_app.ui.icons import app_icon
+
+if TYPE_CHECKING:
+    from qt_app.services.excel_service import ExcelService
+    from qt_app.services.screenshot_service import ScreenshotService
+    from qt_app.services.word_service import WordService
 
 
 class ControlWindow(QDialog):
@@ -205,6 +208,9 @@ class ControlWindow(QDialog):
         item = self._current()
         if not item:
             return
+        app = QApplication.instance()
+        if app is not None:
+            app.setQuitOnLastWindowClosed(False)
         self.logger.log(f"[截图] 开始截图：{item.display_title}")
         self._keep_owner_hidden()
         self.hide()

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any, Optional
 import html
 
-from PySide6.QtCore import Qt, QUrl
+from PySide6.QtCore import QTimer, Qt, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QDialog,
@@ -20,13 +21,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from qt_app.services.excel_service import ExcelService
 from qt_app.services.logger import AppLogger
 from qt_app.services.paths import ensure_app_dirs
-from qt_app.services.screenshot_service import ScreenshotService
-from qt_app.services.word_service import WordService
-from qt_app.ui.control_window import ControlWindow
-from qt_app.ui.excel_mapping_dialog import ExcelMappingDialog
 from qt_app.ui.icons import app_icon
 
 GITHUB_URL = "https://github.com/DavisDing/screenshot-to-word"
@@ -38,10 +34,10 @@ class MainWindow(QMainWindow):
         self.base_path = Path(base_path)
         ensure_app_dirs(self.base_path)
         self.logger = logger
-        self.excel_service = ExcelService(self.logger)
-        self.screenshot_service = ScreenshotService(self.base_path / "Temp", self.logger)
-        self.word_service = WordService(self.base_path / "word_output", self.logger)
-        self.control_panel = None
+        self.excel_service: Optional[Any] = None
+        self.screenshot_service: Optional[Any] = None
+        self.word_service: Optional[Any] = None
+        self.control_panel: Optional[Any] = None
         icon = app_icon()
         if not icon.isNull():
             self.setWindowIcon(icon)
@@ -186,7 +182,38 @@ class MainWindow(QMainWindow):
             return "#1e40af"
         return "#475569"
 
+    def _ensure_runtime_services(self) -> None:
+        """Lazy-load heavy runtime dependencies after the first user action.
+
+        openpyxl/python-docx/PySide screenshot modules noticeably slow down frozen app startup;
+        delaying them keeps the main window responsive sooner.
+        """
+        if self.excel_service is not None:
+            return
+        self.start_btn.setEnabled(False)
+        self.start_btn.setText("正在准备...")
+        try:
+            from qt_app.services.excel_service import ExcelService
+            from qt_app.services.screenshot_service import ScreenshotService
+            from qt_app.services.word_service import WordService
+
+            self.excel_service = ExcelService(self.logger)
+            self.screenshot_service = ScreenshotService(self.base_path / "Temp", self.logger)
+            self.word_service = WordService(self.base_path / "word_output", self.logger)
+        finally:
+            self.start_btn.setEnabled(True)
+            self.start_btn.setText("选择 Excel")
+
     def select_and_run(self) -> None:
+        try:
+            self._ensure_runtime_services()
+        except Exception as exc:
+            QMessageBox.critical(self, "启动执行失败", f"准备运行环境失败：{exc}")
+            self.logger.log(f"[错误] 准备运行环境失败：{exc}")
+            return
+        assert self.excel_service is not None
+        assert self.screenshot_service is not None
+        assert self.word_service is not None
         excel_dir = self.base_path / "excel_input"
         file_name, _ = QFileDialog.getOpenFileName(
             self,
@@ -204,6 +231,8 @@ class MainWindow(QMainWindow):
             self.logger.log(f"[错误] 读取 Excel 失败：{exc}")
             return
 
+        from qt_app.ui.excel_mapping_dialog import ExcelMappingDialog
+
         dialog = ExcelMappingDialog(preview, self)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             self.logger.log("用户取消 Excel 列映射")
@@ -218,6 +247,14 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "无需执行", "所有用例均已执行，或 Excel 中没有待执行数据。")
             self.logger.log("[完成] 没有待执行用例")
             return
+
+        from PySide6.QtWidgets import QApplication
+        from qt_app.ui.control_window import ControlWindow
+
+        # 执行期间会出现“主窗口隐藏 + 标注窗口刚关闭”的瞬间；禁止 Qt 因最后窗口关闭而退出。
+        app = QApplication.instance()
+        if app is not None:
+            app.setQuitOnLastWindowClosed(False)
 
         # 执行期间主窗口保持隐藏，避免在截图时进入画面；测试结束后再恢复。
         self.hide()
@@ -234,11 +271,16 @@ class MainWindow(QMainWindow):
         self.control_panel.show()
 
     def _restore_after_control_panel(self, *_args) -> None:
+        from PySide6.QtWidgets import QApplication
+
         self.control_panel = None
         self.setWindowOpacity(1.0)
         self.show()
         self.raise_()
         self.activateWindow()
+        app = QApplication.instance()
+        if app is not None:
+            QTimer.singleShot(0, lambda: app.setQuitOnLastWindowClosed(True))
 
     def open_dir(self, path: Path) -> None:
         path.mkdir(parents=True, exist_ok=True)
