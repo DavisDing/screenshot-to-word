@@ -1,55 +1,109 @@
-name: Build Windows Executable, Auto Tag and Release
+name: Build Desktop Apps and Release
 
 on:
   push:
     branches:
-      - '*'    # 可根据实际情况限定主分支
+      - '*'
   workflow_dispatch:
 
 jobs:
-  build_and_release:
-    runs-on: windows-latest
-
+  release:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.auto-tag.outputs.new_tag }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # 需要获取完整历史记录以便检测标签
+          fetch-depth: 0
 
-      # 替换原来的 Get latest tag 和 Calculate new tag 步骤
       - name: Auto Tag
         uses: mathieudutour/github-tag-action@v6.2
         id: auto-tag
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          tag_prefix: "v"  # 可选：如果你想要 v1.0.0 而不是 1.0.0
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pyinstaller
-
-      - name: Build exe with PyInstaller
-        run: |
-          pyinstaller main.py --name "DesktopTestTool" --noconfirm --onefile --icon=icon.ico
-
-      - name: Zip exe
-        run: Compress-Archive -Path dist/DesktopTestTool.exe -DestinationPath DesktopTestTool-win.zip
+          tag_prefix: "v"
 
       - name: Create GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create ${{ steps.auto-tag.outputs.new_tag }} --title "Release ${{ steps.auto-tag.outputs.new_tag }}" --notes "Automated release for version ${{ steps.auto-tag.outputs.new_tag }}"
+          gh release create "${{ steps.auto-tag.outputs.new_tag }}" \
+            --title "Release ${{ steps.auto-tag.outputs.new_tag }}" \
+            --notes "Automated desktop release for Windows and macOS." \
+            || gh release view "${{ steps.auto-tag.outputs.new_tag }}"
+
+  build:
+    needs: release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact_name: DesktopTestTool-windows
+            asset_name: DesktopTestTool-windows.zip
+          - os: macos-latest
+            artifact_name: DesktopTestTool-macos
+            asset_name: DesktopTestTool-macos.zip
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Syntax smoke test
+        run: python -m compileall -q main.py qt_app
+
+      - name: Build Windows executable
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          pyinstaller main.py `
+            --name "DesktopTestTool" `
+            --noconfirm `
+            --clean `
+            --onefile `
+            --windowed `
+            --icon=icon.ico `
+            --collect-all PySide6 `
+            --collect-all shiboken6
+          New-Item -ItemType Directory -Force package | Out-Null
+          Copy-Item dist/DesktopTestTool.exe package/DesktopTestTool.exe
+          New-Item -ItemType Directory -Force package/excel_input, package/word_output, package/logs | Out-Null
+          Compress-Archive -Path package/* -DestinationPath "${{ matrix.asset_name }}" -Force
+
+      - name: Build macOS app
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          pyinstaller main.py \
+            --name "DesktopTestTool" \
+            --noconfirm \
+            --clean \
+            --windowed \
+            --collect-all PySide6 \
+            --collect-all shiboken6
+          mkdir -p package/excel_input package/word_output package/logs
+          cp -R dist/DesktopTestTool.app package/DesktopTestTool.app
+          ditto -c -k --sequesterRsrc --keepParent package "${{ matrix.asset_name }}"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.asset_name }}
 
       - name: Upload Release Asset
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release upload ${{ steps.auto-tag.outputs.new_tag }} ./DesktopTestTool-win.zip --clobber
+        run: gh release upload "${{ needs.release.outputs.tag }}" "${{ matrix.asset_name }}" --clobber

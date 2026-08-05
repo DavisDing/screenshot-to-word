@@ -1,158 +1,105 @@
+# Screenshot To Word
 
+一个面向测试执行场景的跨平台桌面工具：读取 Excel 用例，执行截图与标注，并自动把截图写入 Word 报告。
 
-# SCREENSHOT-TO-WORD
+> 当前主线已重构为 **Python + PySide6 / Qt**，目标是更专业的 UI、更稳定的跨平台能力，以及更强的截图标注体验。旧版 Tkinter 入口已保留在 `/Volumes/DingHao_UP/screenshot-to-word/legacy_tk_main.py`，便于回退对比。
 
-## 🧭 工具简介
+## 核心能力
 
-SCREENSHOT-TO-WORD 是一款专为测试人员设计的桌面自动化辅助工具，能够根据 Excel 用例逐条执行截图、图形标注，并自动生成图文并茂的 Word 测试报告。支持基础版与步骤版 Excel 模式，适配手工测试记录场景，配套快捷键和控制面板，显著提升执行效率。
+- **现代化 UI**：Qt 卡片式布局、侧边栏、统一视觉风格，适配 Windows / macOS。
+- **Excel 智能列识别**：支持中文、英文、别名和模糊列名匹配；识别不到时会弹出“确认 Excel 列含义”窗口，通过样例值手动说明哪一列是什么。
+- **截图标注增强**：支持截图后裁剪、方形标记、圆形标记、荧光笔、画笔、文字、撤销、快捷保存。
+- **Word 报告生成**：按测试名称生成或追加 `.docx`，插入验证点、步骤信息和截图。
+- **执行回写**：完成当前截图后把 Excel 对应行标记为“已执行”。
+- **打包可诊断**：启动异常会写入 `logs/crash.log`，避免打包后“闪退但不知道原因”。
 
----
+## 项目结构
 
-## 🧩 设计思路
-
-该工具面向桌面测试场景，核心目标是将测试人员执行用例过程中所需的“截图标注 + Word记录 + Excel追踪”一体化，通过自动化减少重复操作，提高效率。整体设计思路如下：
-
-### 🎯 功能定位
-- 支持两类用例格式（基础版与步骤版），满足不同测试粒度
-- 提供可视化控制面板，便于交互控制、信息展示和状态跟踪
-- 提供快捷键操作以适配高频测试操作场景（如边测边截）
-
-### 🔄 核心流程
-1. 读取 Excel 用例（按格式自动识别基础/步骤模式）
-2. 提取当前用例或步骤的验证点、描述等信息，展示在控制面板
-3. 启动截图标注界面，用户可自由画圈、输入说明、撤销等操作
-4. 截图完成后按规则命名保存，并插入至 Word 报告中（按用例名生成或追加）
-5. 执行完毕自动更新 Excel 为“已执行”，并进入下一条/步骤
-
-### 🧱 模块划分
-- `main.py`：启动主程序与控制入口
-- `ui/`：负责 UI 控制界面（control_panel）和标注界面（annotator）
-- `core/`：驱动逻辑，包括截图控制、任务流程执行等
-- `utils/`：封装了 Excel 操作、日志记录、路径处理、Word 插图等功能模块
-- `excel_input/` 与 `word_output/`：作为标准输入输出目录，隔离操作
-- `logs/`：记录运行信息，便于排查问题
-
-### 📦 可部署性
-- 依赖 Python 标准库和主流第三方库（如 `pandas`、`openpyxl`、`python-docx`、`pyautogui`、`tkinter` 等）
-- 支持 Windows 上使用 `pyinstaller` 一键打包为独立 EXE 文件，方便交付与部署
-
-### 💡 拓展性设计
-- 用例格式可扩展为更多字段（如截图数量控制、自动重试等）
-- 后续支持导出为 PDF、自动上传、截图压缩等增强功能
-- 与测试管理平台（如 TestLink/Jira）联动可作为插件嵌入使用
-
----
-
-## ✨ 功能亮点
-
-- ✅ 读取 Excel 测试用例（支持基础版与步骤版格式）
-- ✏️ 鼠标截图后支持画圈、写字、撤销
-- 📄 自动插图至对应 Word 文件，支持多图编号
-- ⌨️ 快捷键触发（如 F8 一键截图）
-- 🧭 控制面板展示当前验证点、步骤名和步骤描述
-- 🪄 自动生成 Word 报告，不存在则新建
-- 🔄 Excel 自动更新执行状态，标记“已执行”
-- 📂 支持多项目切换（通过自定义 Excel 路径）
-- 🧱 结构清晰、可打包为 `.exe` 独立部署
-
----
-
-## 📁 项目结构
-
-```
-SCREENSHOT-TO-WORD/
-├── .github/workflows/
-│   └── build.yml
-├── core/
-│   ├── screenshot.py         # 截图与图像标注核心逻辑
-│   └── test_runner.py        # 用例驱动器与主执行流程
-├── excel_input/
-│   ├── 步骤版.xlsx             # 示例步骤版用例
-│   └── 基础版.xlsx             # 示例基础版用例
-├── logs/
-│   ├── .gitkeep
-│   └── output.log            # 日志输出
-├── ui/
-│   ├── annotator.py          # 截图标注界面
-│   └── control_panel.py      # 测试控制面板界面
-├── utils/
-│   ├── excel_handler.py      # Excel 读取、写入
-│   ├── logger.py             # 日志记录封装
-│   ├── path_utils.py         # 路径处理工具
-│   └── word_generator.py     # Word 操作逻辑
-├── word_output/
-│   └── .gitkeep              # Word 报告输出目录
-├── main.py                   # 程序入口
-├── ReadMe.MD                 # 当前说明文档
-└── requirements.txt          # 所需依赖
+```text
+/Volumes/DingHao_UP/screenshot-to-word
+├── main.py                         # PySide6/Qt 新入口
+├── legacy_tk_main.py               # 旧版 Tkinter 入口，仅用于回退
+├── qt_app/
+│   ├── models/test_case.py
+│   ├── services/
+│   │   ├── excel_service.py        # Excel 预览、智能映射、读取、回写
+│   │   ├── word_service.py         # Word 生成/追加
+│   │   ├── screenshot_service.py   # Qt 屏幕截图
+│   │   ├── logger.py
+│   │   └── paths.py
+│   └── ui/
+│       ├── main_window.py          # 主界面
+│       ├── control_window.py       # 执行控制面板
+│       ├── annotator_window.py     # 截图标注器
+│       ├── excel_mapping_dialog.py # Excel 列映射确认
+│       └── style.py                # 全局 QSS 皮肤
+├── tests/smoke_test_services.py    # 服务层冒烟测试
+├── excel_input/                    # Excel 输入目录
+├── word_output/                    # Word 输出目录
+└── logs/                           # 日志目录
 ```
 
----
+## 安装与运行
 
-## 📊 Excel 格式支持
-
-### ✅ 基础版（3 列）
-
-| 用例名 | 验证点 | 执行结果 |
-|--------|--------|----------|
-| 登录页 | 显示用户名输入框 | 空白 / Passed |
-
-- 跳过“Passed”“已执行”等行
-- 执行时弹出验证点 + 启动截图
-- 插图并标记执行完成后自动更新为“已执行”
-
-### ✅ 步骤版（6 列）
-
-| 测试名称 | 验证点 | 步骤名称 | 步骤描述 | 预期结果 | 测试结果 |
-|----------|--------|----------|----------|----------|----------|
-| 登录功能 | 登录成功 | 打开登录页 | 点击登录按钮 | 显示首页 | 空白 |
-
-- 显示当前步骤名称与描述
-- 每一步截图 + 标注 + 确认后才能进入“下一步”
-- 全部步骤完成后方可点击“完成”
-- Word 报告中每图前加步骤信息
-
----
-
-## 🎮 快捷键与操作说明
-
-- `F8`：启动截图 + 标注
-- `ESC`：退出标注，保存当前
-- `Enter` 或“下一步”：确认当前步骤
-- 自动创建截图文件夹，避免图片覆盖
-- Word 文件若存在则插图，不存在则新建
-
----
-
-## 🚀 快速开始
-
-### 1. 安装依赖
+建议使用 Python 3.12。
 
 ```bash
-pip install -r requirements.txt
-```
-
-### 2. 运行主程序
-
-```bash
+cd /Volumes/DingHao_UP/screenshot-to-word
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 python main.py
 ```
 
-默认读取 `excel_input` 下的 Excel 文件。可在 UI 中更改路径。
+如果在 macOS 首次截图失败，请到：
 
----
-
-## 🔧 可选：打包为可执行文件（Windows）
-
-```bash
-pip install pyinstaller
-pyinstaller main.py --onefile
+```text
+系统设置 -> 隐私与安全性 -> 屏幕录制
 ```
 
-生成路径：`dist/DesktopTestTool.exe`。可独立部署运行。
+为终端、打包后的 App 或运行环境授予屏幕录制权限。
 
----
+## Excel 格式
 
-## 📄 LICENSE
+工具不再要求列名完全固定，会自动识别下列语义字段：
 
-本项目使用 MIT License 开源，欢迎反馈和改进建议。
+| 语义字段 | 是否必要 | 常见列名示例 |
+|---|---:|---|
+| 测试名称 | 是 | 用例名、用例名称、Case Name、Test Name |
+| 验证点 | 是 | 检查点、校验点、Checkpoint |
+| 测试结果 | 是 | 执行结果、结果、Status、Result |
+| 步骤名称 | 否 | 步骤、操作步骤、Step |
+| 步骤描述 | 否 | 步骤说明、操作说明、Desc |
+| 预期结果 | 否 | 期望结果、Expected |
+
+当列名不标准时，程序会显示每一列的样例值，让用户手动选择“这一列是什么”。
+
+## 打包
+
+GitHub Actions 已更新为自动构建：
+
+- Windows：`DesktopTestTool.exe`，使用 `--windowed`，不再弹出 CMD 窗口。
+- macOS：`DesktopTestTool.app`。
+- Release 中会同时上传 Windows 和 macOS zip 包。
+
+本地 Windows 打包示例：
+
+```powershell
+pyinstaller main.py --name DesktopTestTool --noconfirm --clean --onefile --windowed --icon=icon.ico --collect-all PySide6 --collect-all shiboken6
+```
+
+本地 macOS 打包示例：
+
+```bash
+pyinstaller main.py --name DesktopTestTool --noconfirm --clean --windowed --collect-all PySide6 --collect-all shiboken6
+```
+
+## 自测
+
+服务层冒烟测试覆盖：Excel 列识别、Excel 回写、Word 插图生成。
+
+```bash
+python -m compileall -q main.py qt_app tests
+python tests/smoke_test_services.py
+```
+
+> 当前环境如果没有安装 PySide6，GUI 不能直接启动；但代码会把缺少依赖等启动问题写入 `logs/crash.log`。安装 `/Volumes/DingHao_UP/screenshot-to-word/requirements.txt` 后即可运行 Qt 界面。
