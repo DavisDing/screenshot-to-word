@@ -86,11 +86,13 @@ jobs:
         if: runner.os == 'macOS'
         shell: bash
         run: |
+          python scripts/make_icns.py icon.ico icon.icns
           pyinstaller main.py \
             --name "DesktopTestTool" \
             --noconfirm \
             --clean \
             --windowed \
+            --icon=icon.icns \
             --collect-all PySide6 \
             --collect-all shiboken6
           mkdir -p package/excel_input package/word_output package/logs

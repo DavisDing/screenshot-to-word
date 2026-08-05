@@ -26,7 +26,7 @@ class ExcelMappingDialog(QDialog):
         super().__init__(parent)
         self.preview = preview
         self.setWindowTitle("确认 Excel 列含义")
-        self.resize(920, 640)
+        self.resize(900, 620)
         self.combos: Dict[str, QComboBox] = {}
         self._build_ui()
 
@@ -82,6 +82,8 @@ class ExcelMappingDialog(QDialog):
             required = " *" if role in REQUIRED_ROLES else ""
             label = QLabel(f"{spec.label}{required}")
             combo = QComboBox()
+            combo.setMinimumHeight(38)
+            combo.setMaxVisibleItems(12)
             combo.addItems(options)
             suggested = self.preview.suggested_mapping.get(role)
             if suggested in headers:
