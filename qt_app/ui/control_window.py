@@ -52,6 +52,7 @@ class ControlWindow(QDialog):
         self.owner_window = owner_window
         self.index = 0
         self.last_image: Optional[Path] = None
+        self.current_saved = False
         self.field_rows: Dict[str, Tuple[QWidget, QLabel, QLabel]] = {}
         icon = app_icon()
         if not icon.isNull():
@@ -128,7 +129,7 @@ class ControlWindow(QDialog):
         buttons2.addWidget(self.close_btn)
         root.addLayout(buttons2)
 
-        tip = QLabel("截图时主窗口和面板都会隐藏，完成标注后自动回到这里。")
+        tip = QLabel("截图时主窗口和面板都会隐藏，完成标注后会自动写入 Word 并回写 Excel，再回到这里。")
         tip.setObjectName("PanelTip")
         tip.setWordWrap(True)
         root.addWidget(tip)
@@ -195,6 +196,7 @@ class ControlWindow(QDialog):
             self._finish_all()
             return
         self.last_image = None
+        self.current_saved = False
         self._set_field("case", item.case_name, required=True)
         self._set_field("checkpoint", item.checkpoint, required=True)
         self._set_field("step", item.step_name)
@@ -237,8 +239,9 @@ class ControlWindow(QDialog):
             result = annotator.exec()
             if result == QDialog.DialogCode.Accepted and annotator.result_path:
                 self.last_image = annotator.result_path
-                self.finish_btn.setEnabled(True)
                 self.logger.log(f"[标注] 标注完成：{self.last_image}")
+                if self._save_current_result(item, self.last_image):
+                    self.finish_btn.setEnabled(True)
             else:
                 self.logger.log("[标注] 用户取消标注")
         except Exception as exc:
@@ -249,19 +252,27 @@ class ControlWindow(QDialog):
         # 标注窗口关闭后，下一轮事件循环再恢复执行面板，避免 exec() 收尾阶段抢焦点失败。
         QTimer.singleShot(0, self._restore_panel)
 
+    def _save_current_result(self, item: TestItem, image_path: Path) -> bool:
+        try:
+            self.word_service.add_image(item.case_name, item.checkpoint, image_path, item.step_note())
+            self.excel_service.mark_executed([item.row_index])
+        except Exception as exc:
+            QMessageBox.critical(self, "保存失败", str(exc))
+            self.logger.log(f"[错误] 保存当前用例失败：{exc}")
+            self.current_saved = False
+            return False
+        self.current_saved = True
+        self.logger.log(f"[完成] 当前用例已自动写入 Word 并回写 Excel：{item.display_title}")
+        return True
+
     def finish_current(self) -> None:
         item = self._current()
         if not item or not self.last_image:
             QMessageBox.information(self, "提示", "请先截图并保存标注。")
             return
-        try:
-            self.word_service.add_image(item.case_name, item.checkpoint, self.last_image, item.step_note())
-            self.excel_service.mark_executed([item.row_index])
-        except Exception as exc:
-            QMessageBox.critical(self, "保存失败", str(exc))
-            self.logger.log(f"[错误] 保存当前用例失败：{exc}")
-            return
-        self.logger.log(f"[完成] 当前用例已完成：{item.display_title}")
+        if not self.current_saved:
+            if not self._save_current_result(item, self.last_image):
+                return
         self.index += 1
         self._refresh()
 
