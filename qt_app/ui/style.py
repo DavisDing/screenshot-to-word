@@ -37,6 +37,15 @@ QLabel#SectionTitle {{
     font-weight: 700;
 }}
 QLabel#MutedLabel {{ color: #64748b; }}
+QLabel#VersionBadge {{
+    color: #1d4ed8;
+    background: #dbeafe;
+    border: 1px solid #bfdbfe;
+    border-radius: 12px;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 700;
+}}
 QLabel#PathLabel {{ color: #334155; font-size: 12px; }}
 QLabel#PanelTitle {{ color: #0f172a; font-size: 18px; font-weight: 800; }}
 QLabel#PanelKey {{ color: #64748b; font-size: 12px; font-weight: 700; min-width: 34px; }}

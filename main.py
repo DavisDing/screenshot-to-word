@@ -6,6 +6,7 @@ import traceback
 from pathlib import Path
 
 from qt_app.services.paths import ensure_app_dirs, get_base_path
+from qt_app.version import APP_VERSION
 
 APP_TITLE = "Screenshot To Word"
 
@@ -39,6 +40,7 @@ def main() -> int:
 
     app = QApplication(sys.argv)
     app.setApplicationName(APP_TITLE)
+    app.setApplicationVersion(APP_VERSION)
     icon = app_icon()
     if not icon.isNull():
         app.setWindowIcon(icon)

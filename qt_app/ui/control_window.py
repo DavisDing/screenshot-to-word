@@ -112,7 +112,7 @@ class ControlWindow(QDialog):
         self.capture_btn = QPushButton("截图并标注 F8")
         self.capture_btn.setObjectName("PrimaryButton")
         self.capture_btn.clicked.connect(self.capture_and_annotate)
-        self.finish_btn = QPushButton("完成")
+        self.finish_btn = QPushButton("下一条")
         self.finish_btn.clicked.connect(self.finish_current)
         buttons1.addWidget(self.capture_btn, stretch=2)
         buttons1.addWidget(self.finish_btn, stretch=1)

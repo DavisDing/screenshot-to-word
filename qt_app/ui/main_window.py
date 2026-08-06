@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 from qt_app.services.logger import AppLogger
 from qt_app.services.paths import ensure_app_dirs
 from qt_app.ui.icons import app_icon
+from qt_app.version import VERSION_LABEL
 
 GITHUB_URL = "https://github.com/DavisDing/screenshot-to-word"
 
@@ -41,12 +42,12 @@ class MainWindow(QMainWindow):
         icon = app_icon()
         if not icon.isNull():
             self.setWindowIcon(icon)
-        self.setWindowTitle("Screenshot To Word")
+        self.setWindowTitle(f"Screenshot To Word {VERSION_LABEL}")
         self.resize(1020, 680)
         self.setMinimumSize(860, 560)
         self._build_ui()
         self.logger.set_sink(self._append_log)
-        self.logger.log("[启动] 程序启动完成：PySide6 / Qt 重构版")
+        self.logger.log(f"[启动] 程序启动完成：PySide6 / Qt 重构版，版本：{VERSION_LABEL}")
 
     def _build_ui(self) -> None:
         root = QWidget()
@@ -87,7 +88,7 @@ class MainWindow(QMainWindow):
         side.addWidget(excel_nav)
         side.addWidget(git_nav)
         side.addStretch(1)
-        version = QLabel("Excel 映射 · 截图标注 · Word 输出")
+        version = QLabel(f"版本：{VERSION_LABEL}\nExcel 映射 · 截图标注 · Word 输出")
         version.setObjectName("BrandSubTitle")
         version.setWordWrap(True)
         side.addWidget(version)
@@ -98,9 +99,15 @@ class MainWindow(QMainWindow):
         content.setSpacing(14)
         main.addLayout(content, stretch=1)
 
+        title_row = QHBoxLayout()
         title = QLabel("截图标注与 Word 报告生成")
         title.setObjectName("PageTitle")
-        content.addWidget(title)
+        version_badge = QLabel(f"版本 {VERSION_LABEL}")
+        version_badge.setObjectName("VersionBadge")
+        title_row.addWidget(title)
+        title_row.addStretch(1)
+        title_row.addWidget(version_badge)
+        content.addLayout(title_row)
 
         subtitle2 = QLabel("选择 Excel 用例后，确认列含义，进入小型悬浮控制面板执行截图和标注。")
         subtitle2.setObjectName("MutedLabel")

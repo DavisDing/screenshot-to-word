@@ -52,6 +52,7 @@ class ExcelService:
         self.header_row = 1
         self.columns: List[ColumnInfo] = []
         self.column_map: Dict[str, int] = {}
+        self._merged_parent_cache: Dict[Tuple[int, int], Tuple[int, int]] = {}
         self.version = "基础版"
 
     def preview(self, file_path: Path) -> ExcelPreview:
@@ -74,6 +75,7 @@ class ExcelService:
         self.file_path = Path(file_path)
         self.workbook = load_workbook(self.file_path)
         self.sheet = self.workbook.active
+        self._merged_parent_cache = {}
         self.header_row = self._detect_header_row(self.sheet)
         self.columns = self._read_columns(self.sheet, self.header_row)
         header_to_index = {c.header: c.index for c in self.columns}
@@ -97,7 +99,7 @@ class ExcelService:
             raise RuntimeError("Excel 尚未加载")
         result_col = self.column_map[ROLE_RESULT]
         for row_index in row_indexes:
-            self.sheet.cell(row=row_index, column=result_col).value = status
+            self._mark_cell_value(row_index, result_col, status)
         self.workbook.save(self.file_path)
         self.logger.log(f"Excel 已标记执行结果：{self.file_path}")
 
@@ -106,6 +108,7 @@ class ExcelService:
             self.workbook.close()
         self.workbook = None
         self.sheet = None
+        self._merged_parent_cache = {}
 
     def _detect_header_row(self, ws: Worksheet) -> int:
         best_row = 1
@@ -146,28 +149,74 @@ class ExcelService:
             columns.append(ColumnInfo(index=col, header=header, samples=tuple(samples[:3])))
         return columns
 
-    def _get_cell_text(self, row: int, role: str) -> str:
+    def _get_cell_text(self, row: int, role: str, *, resolve_merged: bool = False) -> str:
         if not self.sheet or role not in self.column_map:
             return ""
-        value = self.sheet.cell(row=row, column=self.column_map[role]).value
+        column = self.column_map[role]
+        value = self.sheet.cell(row=row, column=column).value
+        if value in (None, "") and resolve_merged:
+            parent_row, parent_col = self._merged_parent(row, column)
+            if (parent_row, parent_col) != (row, column):
+                value = self.sheet.cell(row=parent_row, column=parent_col).value
         return str(value).strip() if value not in (None, "") else ""
+
+    def _merged_parent(self, row: int, column: int) -> Tuple[int, int]:
+        if not self.sheet:
+            return row, column
+        key = (row, column)
+        if key in self._merged_parent_cache:
+            return self._merged_parent_cache[key]
+        parent = key
+        for merged_range in self.sheet.merged_cells.ranges:
+            if (merged_range.min_row <= row <= merged_range.max_row) and (merged_range.min_col <= column <= merged_range.max_col):
+                parent = (merged_range.min_row, merged_range.min_col)
+                break
+        self._merged_parent_cache[key] = parent
+        return parent
+
+    def _mark_cell_value(self, row: int, column: int, value: str) -> None:
+        if not self.sheet:
+            return
+        parent_row, parent_col = self._merged_parent(row, column)
+        self.sheet.cell(row=parent_row, column=parent_col).value = value
 
     def _iter_pending_items(self):
         if not self.sheet:
             return
+
+        current_case = ""
+        current_checkpoint = ""
         for row in range(self.header_row + 1, self.sheet.max_row + 1):
-            case_name = self._get_cell_text(row, ROLE_CASE)
-            checkpoint = self._get_cell_text(row, ROLE_CHECKPOINT)
-            if not case_name and not checkpoint:
+            raw_case = self._get_cell_text(row, ROLE_CASE, resolve_merged=True)
+            raw_checkpoint = self._get_cell_text(row, ROLE_CHECKPOINT, resolve_merged=True)
+
+            if raw_case and raw_case != current_case:
+                current_case = raw_case
+                # 新用例开始但验证点为空时，不沿用上一条用例的验证点。
+                current_checkpoint = raw_checkpoint or ""
+            elif raw_case:
+                current_case = raw_case
+            if raw_checkpoint:
+                current_checkpoint = raw_checkpoint
+
+            step_name = self._get_cell_text(row, ROLE_STEP_NAME)
+            step_description = self._get_cell_text(row, ROLE_STEP_DESC)
+            expected_result = self._get_cell_text(row, ROLE_EXPECTED)
+            case_name = current_case
+            checkpoint = current_checkpoint
+
+            if not any((case_name, checkpoint, step_name, step_description, expected_result)):
                 continue
-            result = self._get_cell_text(row, ROLE_RESULT).lower()
+
+            # 测试结果列按当前行判断；测试名称/验证点可从合并单元格或上一行继承。
+            result = self._get_cell_text(row, ROLE_RESULT, resolve_merged=False).lower()
             if result in EXECUTED_STATUSES:
                 continue
             yield TestItem(
                 row_index=row,
                 case_name=case_name or f"未命名用例_{row}",
                 checkpoint=checkpoint or "未填写验证点",
-                step_name=self._get_cell_text(row, ROLE_STEP_NAME),
-                step_description=self._get_cell_text(row, ROLE_STEP_DESC),
-                expected_result=self._get_cell_text(row, ROLE_EXPECTED),
+                step_name=step_name,
+                step_description=step_description,
+                expected_result=expected_result,
             )

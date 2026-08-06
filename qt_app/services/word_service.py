@@ -24,10 +24,9 @@ class WordService:
         else:
             doc = Document()
             doc.add_heading(case_name, level=1)
-            doc.add_paragraph(f"验证点：{checkpoint}")
             self.logger.log(f"创建 Word 报告：{doc_path}")
 
-        if checkpoint:
+        if checkpoint and not self._has_checkpoint(doc, checkpoint):
             doc.add_paragraph(f"验证点：{checkpoint}")
         if step_note:
             for line in step_note.splitlines():
@@ -38,6 +37,10 @@ class WordService:
         doc.save(str(doc_path))
         self.logger.log(f"截图已写入 Word：{doc_path}")
         return doc_path
+
+    def _has_checkpoint(self, doc, checkpoint: str) -> bool:
+        expected = f"验证点：{checkpoint}".strip()
+        return any(paragraph.text.strip() == expected for paragraph in doc.paragraphs)
 
     def _safe_filename(self, name: str) -> str:
         cleaned = INVALID_FILENAME_CHARS.sub("_", name).strip(" ._")
