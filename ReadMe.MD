@@ -1,137 +1,143 @@
 # Screenshot To Word
 
-一款面向测试执行场景的跨平台桌面工具：读取 Excel 用例，按步骤执行截图与标注，并自动生成 Word 报告，同时回写 Excel 执行状态。
+面向测试执行场景的桌面工具。它从 Excel 读取待执行的测试用例，按用例或步骤进行全屏截图与标注，随后自动将截图写入 Word 报告，并回写 Excel 的执行状态。
 
-当前主线已经重构为 **Python + PySide6 / Qt**，目标是：
+## 功能概览
 
-- 更现代、更专业的 UI
-- 更稳定的跨平台体验（Windows / macOS）
-- 更顺畅的步骤式测试执行流程
-- 更强的截图标注能力
-- 更可靠的打包发布与版本管理
+- 支持 `.xlsx` 与 `.xlsm` 格式的 Excel 用例文件。
+- 自动识别表头；无法准确识别时，可在界面中查看列样例并手动确认列含义。
+- 支持基础用例和步骤式用例；步骤式用例会逐条展示和执行。
+- 支持读取测试名称、验证点、步骤名称、步骤描述、预期结果和测试结果等字段。
+- 支持合并单元格中的测试名称和验证点，并正确继承到对应步骤。
+- 自动跳过已执行的记录（支持“已执行 / 通过 / 完成 / 成功 / passed / done”等状态）。
+- 通过悬浮执行面板逐项处理，按 `F8` 可快速截图。
+- 截图标注支持方形、圆形、荧光笔、画笔、文字、裁剪、缩放与撤销。
+- 标注保存后，自动追加到以测试名称命名的 Word 报告；相同验证点不会重复写入。
+- 自动把已完成项的测试结果回写为“已执行”。
+- 提供运行日志、崩溃日志及输入/输出目录快捷入口。
 
-## 当前最新需求 / 目标
+## 运行环境
 
-### 1. UI 方向
-- 采用更现代的界面皮肤
-- 主界面布局更清爽、更专业
-- 执行控制面板更轻量，尽量不遮挡测试内容
-- Excel 列映射对话框更简洁，减少视觉占用
-- 软件内展示版本号，打包版显示 Release 版本
+- Python 3.12（当前构建验证版本）
+- Windows 或 macOS
 
-### 2. 截图标注方向
-- 支持截图后标注
-- 逐步增强标注能力，例如：
-  - 裁剪
-  - 正方形 / 矩形标记
-  - 荧光笔
-  - 文字标注
-  - 撤销 / 重做
-- 截图时主窗口与执行面板需要正确隐藏，避免进入截图画面
+主要依赖：PySide6、openpyxl、python-docx、Pillow 和 PyInstaller。完整版本要求见 [requirements.txt](/Volumes/DingHao_UP/screenshot-to-word/requirements.txt)。
 
-### 3. Excel 执行方向
-- 自动识别 Excel 列含义
-- 识别不到时提供人工确认，尤其要能看样例值判断“这一列是什么”
-- 步骤版用例必须严格按步骤逐条执行
-- 合并单元格场景要能正确读取测试名称、验证点
-- 执行完成后回写 Excel 状态
-- 支持“下一条 / 跳过当前案例”等执行动作
+> macOS 首次使用截图功能时，可能需要在“系统设置 → 隐私与安全性 → 屏幕录制”中允许该应用截图。
 
-### 4. Word 输出方向
-- 自动按用例生成或追加 Word
-- 验证点不重复输出
-- 跳过案例也要能同步记录到 Word
-- 输出内容尽量结构清晰、适合测试报告场景
+## 安装与启动
 
-### 5. 打包与版本方向
-- GitHub Actions 自动打包 Windows / macOS
-- 打包后软件内要显示 Release 版本号
-- 本地开发显示“开发版”
-- 尽量避免 Windows 打包后弹出 cmd 窗口闪退问题
-
-## 技术栈
-
-- 语言：Python
-- GUI：PySide6 / Qt
-- Excel：openpyxl
-- Word：python-docx
-- 图像：Pillow
-- 打包：PyInstaller
-- CI/CD：GitHub Actions
-
-要求的 Python 版本以当前依赖和 CI 为准，当前仓库使用 Python 3.12 进行构建验证。
-
-## 现有主线结构
-
-```text
-/Volumes/DingHao_UP/screenshot-to-word
-├── main.py                         # 程序入口
-├── qt_app/
-│   ├── version.py                  # 版本读取
-│   ├── models/test_case.py         # 测试项数据模型
-│   ├── services/
-│   │   ├── excel_service.py        # Excel 读取、映射、回写
-│   │   ├── word_service.py         # Word 生成/追加
-│   │   ├── screenshot_service.py   # 截图服务
-│   │   ├── logger.py               # 日志
-│   │   └── paths.py                # 路径与目录管理
-│   └── ui/
-│       ├── main_window.py          # 主窗口
-│       ├── control_window.py       # 执行控制面板
-│       ├── annotator_window.py     # 截图标注窗口
-│       ├── excel_mapping_dialog.py # Excel 列确认对话框
-│       ├── icons.py                # 图标加载
-│       └── style.py                # Qt 样式
-├── scripts/
-│   ├── make_icns.py                # macOS 图标生成
-│   └── write_build_version.py      # 打包版本写入
-├── tests/smoke_test_services.py    # 冒烟测试
-├── requirements.txt                # 依赖
-├── icon.ico                        # Windows 图标
-├── assets/                         # Qt 图标资源
-├── excel_input/                    # Excel 输入目录
-├── word_output/                    # Word 输出目录
-└── logs/                           # 日志目录
-```
-
-## 运行方式
+在项目目录执行：
 
 ```bash
-cd /Volumes/DingHao_UP/screenshot-to-word
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 python main.py
 ```
 
-## 自测命令
+程序启动后会自动创建以下目录（如尚不存在）：
+
+```text
+excel_input/   # 建议存放待执行 Excel
+word_output/   # 自动生成的 Word 报告
+Temp/          # 截图临时文件
+logs/          # 运行日志和启动异常日志
+```
+
+也可以在启动后从文件选择器中选取任意位置的 Excel 文件。
+
+## 使用流程
+
+1. 在主界面点击“选择 Excel”。
+2. 在“确认 Excel 列含义”窗口核对自动识别结果，必要时手动选择每个字段对应的列。
+3. 确认后会出现置顶的悬浮执行面板，显示当前用例、验证点及步骤信息。
+4. 点击“截图并标注”或按 `F8`。主窗口和执行面板会暂时隐藏，避免出现在截图中。
+5. 在标注窗口完成标记后点击“保存”（快捷键 `Ctrl+S`）。
+6. 程序自动将截图写入 Word，并将当前 Excel 行的测试结果改为“已执行”；然后点击“下一条”继续。
+7. 全部处理完成后，主窗口会恢复，可从“打开输出目录”查看报告。
+
+在标注窗口中，`Ctrl+Z` 用于撤销，`Esc` 用于取消本次标注。
+
+### 关于“跳过”与“结束”
+
+- “跳过”仅在本次执行中跳到下一项，**不会**写入 Word，也**不会**修改 Excel 状态。
+- “结束”会退出当前执行流程并返回主窗口；已保存的项目仍保留其已写入的 Word 内容和 Excel 状态。
+
+## Excel 字段说明
+
+以下三列为必填项：
+
+| 字段 | 作用 | 常见别名 |
+| --- | --- | --- |
+| 测试名称 | Word 报告名称及用例标题 | 用例名称、测试用例、Case Name、Test Name |
+| 验证点 | 报告中的验证项 | 检查点、校验点、Checkpoint |
+| 测试结果 | 用于识别和回写执行状态 | 结果、状态、执行结果、Result、Status |
+
+以下列为可选项；任意一列存在时，程序会按步骤式用例处理：
+
+| 字段 | 作用 |
+| --- | --- |
+| 步骤名称 | 当前步骤的标题或编号 |
+| 步骤描述 | 当前步骤的操作说明 |
+| 预期结果 | 当前步骤的预期表现 |
+
+表头不必固定在第 1 行，程序会在前 15 行中自动寻找最可能的表头行。若列名不规范，请在映射窗口中手动选择；窗口会显示前三个非空样例值供核对。
+
+## 输入示例
+
+基础用例：
+
+| 测试名称 | 验证点 | 测试结果 |
+| --- | --- | --- |
+| 登录功能 | 登录成功 | |
+
+步骤式用例：
+
+| 测试名称 | 验证点 | 步骤名称 | 步骤描述 | 预期结果 | 测试结果 |
+| --- | --- | --- | --- | --- | --- |
+| 登录功能 | 登录成功 | 1 | 打开登录页 | 显示登录表单 | |
+| 登录功能 | 登录成功 | 2 | 输入正确账号密码 | 进入首页 | |
+
+步骤式表格中，测试名称和验证点可使用纵向合并单元格。每个待执行步骤在保存截图后都会独立回写自己的“测试结果”单元格。
+
+## Word 输出规则
+
+- 每个测试名称生成或追加一个 `.docx` 文件。
+- 文件名中的 Windows 不支持字符会自动替换为下划线。
+- 新报告会以测试名称作为一级标题。
+- 每个验证点只写入一次；随后步骤会继续追加步骤信息和截图。
+- 截图宽度固定为约 5.8 英寸，以适配常见报告页面。
+
+## 项目结构
+
+```text
+├── main.py                         # 程序入口与异常记录
+├── qt_app/
+│   ├── models/test_case.py         # 测试项数据模型
+│   ├── services/
+│   │   ├── excel_service.py        # Excel 读取、映射与回写
+│   │   ├── word_service.py         # Word 报告生成与追加
+│   │   ├── screenshot_service.py   # 全屏截图
+│   │   ├── logger.py               # 日志服务
+│   │   └── paths.py                # 运行目录与资源路径
+│   └── ui/                         # 主窗口、执行面板、标注与映射界面
+├── utils/excel_schema.py           # Excel 字段定义与自动匹配
+├── tests/smoke_test_services.py    # 服务层冒烟测试
+├── excel_input/                    # 示例 Excel
+└── requirements.txt                # Python 依赖
+```
+
+## 自测
 
 ```bash
 python -m compileall -q main.py qt_app tests scripts
 python tests/smoke_test_services.py
 ```
 
-## 打包说明
+冒烟测试覆盖 Excel 列映射、执行状态回写、合并单元格步骤读取，以及 Word 验证点去重。
 
-- Windows：PyInstaller 打包为 `.exe`，使用 `--windowed`
-- macOS：PyInstaller 打包为 `.app`
-- GitHub Actions 会在打包前写入版本号
-- 打包版软件内部会显示 GitHub Release 的 tag
+## 版本与日志
 
-## 已完成里程碑
-
-- 已完成 Qt 主线重构
-- 已完成主界面现代化
-- 已完成执行控制面板
-- 已完成 Excel 列映射确认流程
-- 已完成步骤版合并单元格支持
-- 已完成 Word 验证点去重
-- 已完成打包版本号注入
-- 已完成基础 smoke test
-
-## 后续优先事项
-
-1. 继续完善“跳过当前案例”逻辑，并同步写入 Word / Excel
-2. 继续优化截图标注工具能力
-3. 继续收敛执行控制面板与 Excel 映射对话框的 UI
-4. 增加更完整的 GUI 回归测试
-5. 验证 GitHub Actions 产物在 Windows / macOS 的实际可用性
+- 源码直接运行时，界面显示“开发版”。
+- 打包时可通过 `APP_VERSION` 环境变量或构建版本文件注入版本号。
+- 常规运行日志位于 `logs/output.log`；若启动失败，异常详情会追加到 `logs/crash.log`。
