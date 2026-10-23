@@ -5,5 +5,7 @@ build/
 dist/
 package/
 *.spec
+!DesktopTestTool.spec
+icon.icns
 *.zip
 .DS_Store

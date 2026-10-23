@@ -3,38 +3,17 @@ name: Build Desktop Apps and Release
 on:
   push:
     branches:
-      - '*'
+      - '**'
+    tags:
+      - 'v*'
+  pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-  release:
-    runs-on: ubuntu-latest
-    outputs:
-      tag: ${{ steps.auto-tag.outputs.new_tag }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Auto Tag
-        uses: mathieudutour/github-tag-action@v6.2
-        id: auto-tag
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          tag_prefix: "v"
-
-      - name: Create GitHub Release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release create "${{ steps.auto-tag.outputs.new_tag }}" \
-            --title "Release ${{ steps.auto-tag.outputs.new_tag }}" \
-            --notes "Automated desktop release for Windows and macOS." \
-            || gh release view "${{ steps.auto-tag.outputs.new_tag }}"
-
   build:
-    needs: release
     strategy:
       fail-fast: false
       matrix:
@@ -62,25 +41,35 @@ jobs:
           pip install -r requirements.txt
 
       - name: Write application version
-        run: python scripts/write_build_version.py "${{ needs.release.outputs.tag }}"
+        shell: bash
+        env:
+          BUILD_REF_TYPE: ${{ github.ref_type }}
+          BUILD_REF_NAME: ${{ github.ref_name }}
+          BUILD_SHA: ${{ github.sha }}
+        run: |
+          if [ "$BUILD_REF_TYPE" = "tag" ]; then
+            python scripts/write_build_version.py "$BUILD_REF_NAME"
+          else
+            python scripts/write_build_version.py "dev-${BUILD_SHA:0:7}"
+          fi
 
       - name: Syntax smoke test
-        run: python -m compileall -q main.py qt_app scripts
+        run: python -m compileall -q main.py qt_app scripts tests pyinstaller_hooks
+
+      - name: Service smoke tests
+        run: python tests/smoke_test_services.py
+
+      - name: Regression tests
+        run: python -m unittest discover -s tests -p 'test_*.py' -v
 
       - name: Build Windows executable
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          pyinstaller main.py `
-            --name "DesktopTestTool" `
-            --noconfirm `
-            --clean `
-            --windowed `
-            --icon=icon.ico `
-            --add-data "icon.ico;." `
-            --add-data "assets;assets" `
-            --collect-all PySide6 `
-            --collect-all shiboken6
+          pyinstaller --noconfirm --clean DesktopTestTool.spec
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/check_bundle.py dist/DesktopTestTool
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           New-Item -ItemType Directory -Force package | Out-Null
           Copy-Item dist/DesktopTestTool/* package/ -Recurse -Force
           New-Item -ItemType Directory -Force package/excel_input, package/word_output, package/logs | Out-Null
@@ -91,16 +80,8 @@ jobs:
         shell: bash
         run: |
           python scripts/make_icns.py icon.ico icon.icns
-          pyinstaller main.py \
-            --name "DesktopTestTool" \
-            --noconfirm \
-            --clean \
-            --windowed \
-            --icon=icon.icns \
-            --add-data "icon.ico:." \
-            --add-data "assets:assets" \
-            --collect-all PySide6 \
-            --collect-all shiboken6
+          pyinstaller --noconfirm --clean DesktopTestTool.spec
+          python scripts/check_bundle.py dist/DesktopTestTool.app
           mkdir -p package/excel_input package/word_output package/logs
           cp -R dist/DesktopTestTool.app package/DesktopTestTool.app
           ditto -c -k --sequesterRsrc --keepParent package "${{ matrix.asset_name }}"
@@ -110,8 +91,41 @@ jobs:
         with:
           name: ${{ matrix.artifact_name }}
           path: ${{ matrix.asset_name }}
+          if-no-files-found: error
 
-      - name: Upload Release Asset
+  release:
+    needs: build
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download Windows package
+        uses: actions/download-artifact@v4
+        with:
+          name: DesktopTestTool-windows
+          path: release-assets
+
+      - name: Download macOS package
+        uses: actions/download-artifact@v4
+        with:
+          name: DesktopTestTool-macos
+          path: release-assets
+
+      - name: Create GitHub Release with both packages
+        shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "${{ needs.release.outputs.tag }}" "${{ matrix.asset_name }}" --clobber
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          test -s release-assets/DesktopTestTool-windows.zip
+          test -s release-assets/DesktopTestTool-macos.zip
+          gh release create "$RELEASE_TAG" \
+            release-assets/DesktopTestTool-windows.zip \
+            release-assets/DesktopTestTool-macos.zip \
+            --verify-tag \
+            --target "$RELEASE_SHA" \
+            --title "Release $RELEASE_TAG" \
+            --notes "Automated desktop release for Windows and macOS."

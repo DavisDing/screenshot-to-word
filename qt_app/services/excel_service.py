@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from shutil import copymode
+from tempfile import NamedTemporaryFile
 from typing import Dict, Iterable, List, Optional, Tuple
 
 from openpyxl import load_workbook
@@ -56,24 +58,28 @@ class ExcelService:
         self.version = "基础版"
 
     def preview(self, file_path: Path) -> ExcelPreview:
-        wb = load_workbook(file_path)
-        ws = wb.active
-        header_row = self._detect_header_row(ws)
-        columns = self._read_columns(ws, header_row)
-        suggestions, reasons = suggest_column_mapping([c.header for c in columns])
-        wb.close()
-        return ExcelPreview(
-            file_path=Path(file_path),
-            sheet_name=ws.title,
-            header_row=header_row,
-            columns=tuple(columns),
-            suggested_mapping=suggestions,
-            reasons=reasons,
-        )
+        file_path = Path(file_path)
+        wb = load_workbook(file_path, keep_vba=file_path.suffix.lower() == ".xlsm")
+        try:
+            ws = wb.active
+            header_row = self._detect_header_row(ws)
+            columns = self._read_columns(ws, header_row)
+            suggestions, reasons = suggest_column_mapping([c.header for c in columns])
+            return ExcelPreview(
+                file_path=file_path,
+                sheet_name=ws.title,
+                header_row=header_row,
+                columns=tuple(columns),
+                suggested_mapping=suggestions,
+                reasons=reasons,
+            )
+        finally:
+            self._close_workbook(wb)
 
     def load(self, file_path: Path, mapping_by_role: Dict[str, Optional[str]]) -> List[TestItem]:
+        self.close()
         self.file_path = Path(file_path)
-        self.workbook = load_workbook(self.file_path)
+        self.workbook = load_workbook(self.file_path, keep_vba=self.file_path.suffix.lower() == ".xlsm")
         self.sheet = self.workbook.active
         self._merged_parent_cache = {}
         self.header_row = self._detect_header_row(self.sheet)
@@ -87,6 +93,7 @@ class ExcelService:
         missing = [role for role in REQUIRED_ROLES if role not in self.column_map]
         if missing:
             readable = "、".join(missing)
+            self.close()
             raise ValueError(f"Excel 缺少必要列映射：{readable}")
 
         self.version = "步骤版" if any(role in self.column_map for role in STEP_HINT_FIELDS) else "基础版"
@@ -97,18 +104,54 @@ class ExcelService:
     def mark_executed(self, row_indexes: Iterable[int], status: str = "已执行") -> None:
         if not self.workbook or not self.sheet or not self.file_path:
             raise RuntimeError("Excel 尚未加载")
+        rows = list(row_indexes)
         result_col = self.column_map[ROLE_RESULT]
-        for row_index in row_indexes:
+        # openpyxl closes embedded image streams during save. Reload for each
+        # write so later steps never reuse those consumed streams. Save beside
+        # the source first, so a write failure cannot truncate the original.
+        workbook = load_workbook(self.file_path, keep_vba=self.file_path.suffix.lower() == ".xlsm")
+        temporary_path = None
+        try:
+            sheet = workbook[self.sheet.title]
+            for row_index in rows:
+                parent_row, parent_col = self._merged_parent(row_index, result_col)
+                sheet.cell(row=parent_row, column=parent_col).value = status
+            with NamedTemporaryFile(
+                dir=self.file_path.parent,
+                prefix=".screenshot-word-",
+                suffix=self.file_path.suffix,
+                delete=False,
+            ) as temporary:
+                temporary_path = Path(temporary.name)
+            workbook.save(temporary_path)
+            copymode(self.file_path, temporary_path)
+            temporary_path.replace(self.file_path)
+        finally:
+            try:
+                self._close_workbook(workbook)
+            finally:
+                if temporary_path is not None:
+                    temporary_path.unlink(missing_ok=True)
+        # Keep the in-memory execution state unchanged until persistence succeeds.
+        for row_index in rows:
             self._mark_cell_value(row_index, result_col, status)
-        self.workbook.save(self.file_path)
         self.logger.log(f"Excel 已标记执行结果：{self.file_path}")
 
     def close(self) -> None:
         if self.workbook:
-            self.workbook.close()
+            self._close_workbook(self.workbook)
         self.workbook = None
         self.sheet = None
         self._merged_parent_cache = {}
+
+    @staticmethod
+    def _close_workbook(workbook) -> None:
+        try:
+            workbook.close()
+        finally:
+            # openpyxl 的 Workbook.close() 不会关闭用于保留宏的内存归档。
+            if workbook.vba_archive is not None:
+                workbook.vba_archive.close()
 
     def _detect_header_row(self, ws: Worksheet) -> int:
         best_row = 1
@@ -187,6 +230,15 @@ class ExcelService:
         current_case = ""
         current_checkpoint = ""
         for row in range(self.header_row + 1, self.sheet.max_row + 1):
+            row_case = self._get_cell_text(row, ROLE_CASE)
+            row_checkpoint = self._get_cell_text(row, ROLE_CHECKPOINT)
+            step_name = self._get_cell_text(row, ROLE_STEP_NAME)
+            step_description = self._get_cell_text(row, ROLE_STEP_DESC)
+            expected_result = self._get_cell_text(row, ROLE_EXPECTED)
+            # 必须先检查当前行自身的内容，避免空行从上一行或合并单元格继承后成为待执行项。
+            if not any((row_case, row_checkpoint, step_name, step_description, expected_result)):
+                continue
+
             raw_case = self._get_cell_text(row, ROLE_CASE, resolve_merged=True)
             raw_checkpoint = self._get_cell_text(row, ROLE_CHECKPOINT, resolve_merged=True)
 
@@ -199,14 +251,8 @@ class ExcelService:
             if raw_checkpoint:
                 current_checkpoint = raw_checkpoint
 
-            step_name = self._get_cell_text(row, ROLE_STEP_NAME)
-            step_description = self._get_cell_text(row, ROLE_STEP_DESC)
-            expected_result = self._get_cell_text(row, ROLE_EXPECTED)
             case_name = current_case
             checkpoint = current_checkpoint
-
-            if not any((case_name, checkpoint, step_name, step_description, expected_result)):
-                continue
 
             # 测试结果列按当前行判断；测试名称/验证点可从合并单元格或上一行继承。
             result = self._get_cell_text(row, ROLE_RESULT, resolve_merged=False).lower()

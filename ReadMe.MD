@@ -4,7 +4,7 @@
 
 ## 功能概览
 
-- 支持 `.xlsx` 与 `.xlsm` 格式的 Excel 用例文件。
+- 支持 `.xlsx` 与 `.xlsm` 格式的 Excel 用例文件；回写 `.xlsm` 执行状态时保留已有 VBA 宏。
 - 自动识别表头；无法准确识别时，可在界面中查看列样例并手动确认列含义。
 - 支持基础用例和步骤式用例；步骤式用例会逐条展示和执行。
 - 支持读取测试名称、验证点、步骤名称、步骤描述、预期结果和测试结果等字段。
@@ -14,6 +14,7 @@
 - 截图标注支持方形、圆形、荧光笔、画笔、文字、裁剪、缩放与撤销。
 - 标注保存后，自动追加到以测试名称命名的 Word 报告；相同验证点不会重复写入。
 - 自动把已完成项的测试结果回写为“已执行”。
+- 带有图片的 Excel 可连续回写；每次写入同目录临时副本后再替换，保存失败时保留原文件。
 - 提供运行日志、崩溃日志及输入/输出目录快捷入口。
 
 ## 运行环境
@@ -100,10 +101,14 @@ logs/          # 运行日志和启动异常日志
 
 步骤式表格中，测试名称和验证点可使用纵向合并单元格。每个待执行步骤在保存截图后都会独立回写自己的“测试结果”单元格。
 
+没有测试名称、验证点或步骤内容的空行会自动跳过，包括带格式的表尾空行；有步骤内容的行仍可继承测试名称和验证点。
+
 ## Word 输出规则
 
 - 每个测试名称生成或追加一个 `.docx` 文件。
 - 文件名中的 Windows 不支持字符会自动替换为下划线。
+- 不同测试名称在字符替换或长度截断后撞名时，会添加摘要后缀，分别保存报告。追加已有报告前会核对用例身份；同一测试名称再次执行时仍追加自己的报告。
+- 已有报告保留原位置和内容；此前已经混入同一报告的内容需要人工核对，程序不会自动拆分。
 - 新报告会以测试名称作为一级标题。
 - 每个验证点只写入一次；随后步骤会继续追加步骤信息和截图。
 - 截图宽度固定为约 5.8 英寸，以适配常见报告页面。
@@ -130,11 +135,46 @@ logs/          # 运行日志和启动异常日志
 ## 自测
 
 ```bash
-python -m compileall -q main.py qt_app tests scripts
+python -m compileall -q main.py qt_app tests scripts pyinstaller_hooks
 python tests/smoke_test_services.py
+python -m unittest discover -s tests -p 'test_*.py' -v
 ```
 
 冒烟测试覆盖 Excel 列映射、执行状态回写、合并单元格步骤读取，以及 Word 验证点去重。
+
+回归测试覆盖 `.xlsm` 宏包保留、跨工作表图片在连续回写时保留、写入/替换失败时保护原文件并允许重试、空行过滤与有效步骤继承、报告文件名碰撞及跨次追加。宏包保留测试不会执行 VBA 宏。
+
+## 本地打包与体积控制
+
+两端共用 `DesktopTestTool.spec`，通过 PyInstaller 官方 hooks 按需收集依赖，排除当前业务未使用的 WebEngine、QML/Quick、3D 和多媒体模块。保留完整 PySide6 安装依赖，不切换 Essentials，也不在成品目录中批量删除动态库。Pillow、Qt 平台插件、SVG、shiboken6、运行时辅助模块及 Word 默认模板必须保留。
+
+`pyinstaller_hooks/hook-PySide6.QtGui.py` 复用官方 QtGui 收集逻辑，只在依赖扫描前排除未使用的 Qt 虚拟键盘插件，避免它重新带入 QML/Quick。系统原生输入法相关组件和图像插件继续保留。
+
+Windows：
+
+```powershell
+python -m PyInstaller --noconfirm --clean DesktopTestTool.spec
+python scripts/check_bundle.py dist/DesktopTestTool
+```
+
+macOS：
+
+```bash
+python scripts/make_icns.py icon.ico icon.icns
+python -m PyInstaller --noconfirm --clean DesktopTestTool.spec
+python scripts/check_bundle.py dist/DesktopTestTool.app
+```
+
+成品检查会读取实际打包的 Python 模块索引和文件列表：缺少延迟加载服务、Pillow、运行时辅助模块、必要 Qt 扩展/插件或文档资源，以及重新带入上述大型 Qt 模块时均报错。它不启动 GUI，不能替代两端原生验收。
+
+发布前仍需验证：启动和文件选择、SVG 箭头、中文文字、截图权限与 F8、标注/PNG 保存、Word 新建与追加，以及 `.xlsx`/`.xlsm` 回写时保留宏和已有图片。包大小应以对应提交的实际产物为准。
+
+## CI 与发布
+
+- 分支推送、Pull Request 和手动运行会执行语法检查、服务冒烟及回归测试，并构建 Windows 和 macOS 包，上传到该次 Actions 的 artifacts。
+- 只有显式推送 `v*` 版本标签才创建 GitHub Release；Release 等待两端测试、构建及 artifact 上传均成功后，再附带两份安装包发布。
+- 工作流不再自动创建版本标签。正式构建使用标签名作为版本号，其他构建使用 `dev-<提交短 SHA>`。
+- 构建后先执行成品模块与资源检查，通过后才压缩、上传 artifact；检查失败会阻止发布。
 
 ## 版本与日志
 
