@@ -198,6 +198,7 @@ class ControlWindow(QDialog):
         self.last_image = None
         self.current_saved = False
         self._set_field("case", item.case_name, required=True)
+        self.setWindowTitle(f"执行控制 — {item.sheet_name}" if item.sheet_name else "执行控制")
         self._set_field("checkpoint", item.checkpoint, required=True)
         self._set_field("step", item.step_name)
         self._set_field("desc", item.step_description)
@@ -255,7 +256,7 @@ class ControlWindow(QDialog):
     def _save_current_result(self, item: TestItem, image_path: Path) -> bool:
         try:
             self.word_service.add_image(item.case_name, item.checkpoint, image_path, item.step_note())
-            self.excel_service.mark_executed([item.row_index])
+            self.excel_service.mark_executed([item.row_index], sheet_name=item.sheet_name or None)
         except Exception as exc:
             QMessageBox.critical(self, "保存失败", str(exc))
             self.logger.log(f"[错误] 保存当前用例失败：{exc}")

@@ -232,7 +232,7 @@ class MainWindow(QMainWindow):
             self.logger.log("用户取消选择 Excel")
             return
         try:
-            preview = self.excel_service.preview(Path(file_name))
+            previews = self.excel_service.preview_all(Path(file_name))
         except Exception as exc:
             QMessageBox.critical(self, "读取失败", f"读取 Excel 失败：{exc}")
             self.logger.log(f"[错误] 读取 Excel 失败：{exc}")
@@ -240,12 +240,15 @@ class MainWindow(QMainWindow):
 
         from qt_app.ui.excel_mapping_dialog import ExcelMappingDialog
 
-        dialog = ExcelMappingDialog(preview, self)
-        if dialog.exec() != QDialog.DialogCode.Accepted:
-            self.logger.log("用户取消 Excel 列映射")
-            return
+        mappings = {}
+        for preview in previews:
+            dialog = ExcelMappingDialog(preview, self)
+            if dialog.exec() != QDialog.DialogCode.Accepted:
+                self.logger.log("用户取消 Excel 列映射")
+                return
+            mappings[preview.sheet_name] = dialog.mapping()
         try:
-            items = self.excel_service.load(Path(file_name), dialog.mapping())
+            items = self.excel_service.load_all(Path(file_name), mappings)
         except Exception as exc:
             QMessageBox.critical(self, "加载失败", str(exc))
             self.logger.log(f"[错误] 加载 Excel 失败：{exc}")

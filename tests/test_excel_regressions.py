@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from shutil import copyfileobj
 from tempfile import TemporaryDirectory
 import sys
 import unittest
@@ -15,6 +16,7 @@ if str(ROOT) not in sys.path:
 from openpyxl import Workbook, load_workbook
 from openpyxl.drawing.image import Image as WorksheetImage
 from openpyxl.styles import PatternFill
+from lxml import etree
 from PIL import Image
 
 from qt_app.services.excel_service import ExcelService
@@ -237,28 +239,22 @@ class ExcelRegressionTests(unittest.TestCase):
         self.excel.load(path, MAPPING)
         original = path.read_bytes()
 
-        def fail_mid_save(workbook, target):
-            Path(target).write_bytes(b"incomplete archive")
+        def fail_mid_save(archive, entry, data):
+            archive.fp.write(b"incomplete archive")
             raise OSError("save interrupted")
 
         for method, error in (("save", "save interrupted"), ("replace", "file locked")):
             with self.subTest(method=method):
-                loaded = []
-
-                def capture(*args, **kwargs):
-                    workbook = load_workbook(*args, **kwargs)
-                    loaded.append(workbook)
-                    return workbook
-
-                failure = patch.object(Workbook, "save", fail_mid_save) if method == "save" else patch.object(
+                # Persistence now patches the ZIP worksheet instead of using
+                # Workbook.save; inject the same partial-write fault there.
+                failure = patch.object(ZipFile, "writestr", fail_mid_save) if method == "save" else patch.object(
                     Path, "replace", side_effect=PermissionError("file locked"),
                 )
-                with patch("qt_app.services.excel_service.load_workbook", side_effect=capture), failure:
+                with failure:
                     with self.assertRaisesRegex(OSError, error):
                         self.excel.mark_executed([2])
                 self.assertEqual(path.read_bytes(), original)
                 self.assertIsNone(self.excel.sheet["F2"].value)
-                self.assertIsNone(loaded[0].vba_archive.fp)
                 self.assertEqual(list(self.base.glob(".screenshot-word-*")), [])
         self.excel.mark_executed([2])
         self.assertEqual(self.excel.sheet["F2"].value, "已执行")
@@ -279,6 +275,191 @@ class ExcelRegressionTests(unittest.TestCase):
             self.assertEqual(saved.active["F2"].value, "已执行")
         finally:
             saved.close()
+
+    def test_all_sheets_execute_in_tab_order_with_independent_mappings_and_inheritance(self) -> None:
+        path = self.base / "all_sheets.xlsm"
+        workbook = Workbook()
+        first = workbook.active
+        first.title = "第一张"
+        first.append(HEADERS)
+        first.append(["登录", "成功", "步骤1", "", "", ""])
+        first.append([None, None, "步骤2", "", "", ""])
+        first.merge_cells("A2:A3")
+        first.merge_cells("B2:B3")
+        empty = workbook.create_sheet("空白表")
+        empty["F20"].fill = PatternFill(fill_type="solid", fgColor="FFFF00")
+        second = workbook.create_sheet("第二张")
+        second.append(["Status", "Check Point", "Case Name"])
+        second.append([None, "独立验证点", "支付"])
+        second.append(["已执行", "完成", "退出"])
+        workbook.active = 2
+        workbook.save(path)
+        workbook.close()
+        add_macro_package(path)
+
+        previews = self.excel.preview_all(path)
+        self.assertEqual([p.sheet_name for p in previews], ["第一张", "第二张"])
+        # The legacy single-sheet entry points are deterministic as well.
+        self.assertEqual(self.excel.preview(path).sheet_name, "第一张")
+        mappings = {p.sheet_name: p.suggested_mapping for p in reversed(previews)}
+        items = self.excel.load_all(path, mappings)
+        self.assertEqual([(i.sheet_name, i.row_index, i.case_name) for i in items], [
+            ("第一张", 2, "登录"), ("第一张", 3, "登录"), ("第二张", 2, "支付"),
+        ])
+        with self.assertRaisesRegex(ValueError, "必须指定工作表"):
+            self.excel.mark_executed([2])
+        for item in items:
+            self.excel.mark_executed([item.row_index], sheet_name=item.sheet_name)
+        saved = load_workbook(path, keep_vba=True)
+        try:
+            self.assertEqual(saved.active.title, "第二张")
+            self.assertEqual([saved["第一张"].cell(row, 6).value for row in (2, 3)], ["已执行"] * 2)
+            self.assertEqual(saved["第二张"]["A2"].value, "已执行")
+            self.assertEqual(saved["第二张"]["C2"].value, "支付")
+            self.assertIsNone(saved["空白表"]["F20"].value)
+        finally:
+            self.excel._close_workbook(saved)
+        self.assert_macro_package_preserved(path)
+        self.assertEqual(self.excel.load_all(path, mappings), [])
+
+    def test_all_sheets_require_valid_mappings_and_release_workbook_on_failure(self) -> None:
+        path = self.base / "invalid_sheet.xlsm"
+        make_workbook(path, [["登录", "成功", "", "", "", ""]])
+        workbook = load_workbook(path)
+        workbook.create_sheet("第二张").append(["不规范标题", "需要手动映射"])
+        workbook.save(path)
+        workbook.close()
+        add_macro_package(path)
+        original = path.read_bytes()
+        for mappings, error in (({"Sheet": MAPPING}, "工作表已变化"),
+                                ({"Sheet": MAPPING, "第二张": {}}, "第二张")):
+            with self.subTest(error=error):
+                with self.assertRaisesRegex(ValueError, error):
+                    self.excel.load_all(path, mappings)
+                self.assertIsNone(self.excel.workbook)
+                self.assertEqual(path.read_bytes(), original)
+
+    def test_status_patch_does_not_reserialize_other_parts_or_reload_workbook(self) -> None:
+        path = self.base / "parts.xlsm"
+        make_workbook(path, [["登录", "成功", "步骤1", "", "", ""],
+                             [None, None, "步骤2", "", "", ""]])
+        add_macro_package(path)
+        with ZipFile(path, "a") as archive:
+            archive.writestr("customXml/preserved.bin", b"preserve-unknown-extension\x00\xff")
+            archive.comment = b"package comment"
+        with ZipFile(path) as archive:
+            before = {name: archive.read(name) for name in archive.namelist()}
+        self.excel.load(path, MAPPING)
+        with patch("qt_app.services.excel_service.load_workbook", side_effect=AssertionError("unexpected reload")), \
+             patch.object(Workbook, "save", side_effect=AssertionError("unexpected save")):
+            self.excel.mark_executed([2])
+            self.excel.mark_executed([3])
+        with ZipFile(path) as archive:
+            self.assertEqual(archive.comment, b"package comment")
+            self.assertEqual(len(archive.namelist()), len(set(archive.namelist())))
+            after = {name: archive.read(name) for name in archive.namelist()}
+        self.assertEqual(set(before), set(after))
+        self.assertEqual([name for name in before if before[name] != after[name]], ["xl/worksheets/sheet1.xml"])
+        self.assert_macro_package_preserved(path)
+
+    def test_status_patch_keeps_cell_styles_namespace_extensions_and_cell_order(self) -> None:
+        path = self.base / "styled.xlsx"
+        make_workbook(path, [["登录", "成功", "", "", "", "待执行", "保留右侧值"]])
+        workbook = load_workbook(path)
+        workbook.active["F2"].fill = PatternFill(fill_type="solid", fgColor="FFFF00")
+        workbook.save(path)
+        workbook.close()
+        self.excel.load(path, MAPPING)
+        self.excel.mark_executed([2], status=" 通过 & <确认> ")
+        saved = load_workbook(path)
+        try:
+            self.assertEqual(saved.active["F2"].fill.fgColor.rgb, "00FFFF00")
+            self.assertEqual(saved.active["F2"].value, " 通过 & <确认> ")
+            self.assertEqual(saved.active["G2"].value, "保留右侧值")
+        finally:
+            saved.close()
+        xml = (b'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+               b'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" '
+               b'xmlns:x14="urn:test-extension" mc:Ignorable="x14">'
+               b'<sheetData><row r="2"><c r="A2"/><c r="G2"/></row></sheetData>'
+               b'<extLst><ext uri="extension"><x14:unchanged/></ext></extLst></worksheet>')
+        patched, _ = self.excel._patch_status_xml(xml, [2], 6, "已执行")
+        root = etree.fromstring(patched)
+        self.assertEqual(root.nsmap["x14"], "urn:test-extension")
+        self.assertIsNotNone(root.find("{*}extLst/{*}ext/{urn:test-extension}unchanged"))
+        self.assertEqual([c.get("r") for c in root.find("{*}sheetData/{*}row")], ["A2", "F2", "G2"])
+
+    def test_status_patch_handles_merged_results_and_missing_sheet_without_touching_source(self) -> None:
+        path = self.base / "merged_result.xlsx"
+        make_workbook(path, [["登录", "成功", "步骤1", "", "", ""],
+                             [None, None, "步骤2", "", "", ""]])
+        workbook = load_workbook(path)
+        workbook.active.merge_cells("F2:F3")
+        workbook.save(path)
+        workbook.close()
+        self.excel.load(path, MAPPING)
+        self.excel.mark_executed([3])
+        saved = load_workbook(path)
+        try:
+            self.assertEqual(saved.active["F2"].value, "已执行")
+            self.assertIsNone(saved.active["F3"].value)
+            saved.active.title = "已更名"
+            saved.save(path)
+        finally:
+            saved.close()
+        original = path.read_bytes()
+        with self.assertRaisesRegex(ValueError, "工作表已变化"):
+            self.excel.mark_executed([2])
+        self.assertEqual(path.read_bytes(), original)
+        self.assertEqual(list(self.base.glob(".screenshot-word-*")), [])
+
+    def test_external_save_during_status_write_is_preserved_and_retry_succeeds(self) -> None:
+        path = self.base / "concurrent.xlsx"
+        make_workbook(path, [["登录", "成功", "步骤1", "", "", ""]])
+        self.excel.load(path, MAPPING)
+        external_bytes = None
+
+        def save_concurrently(reader, writer, length):
+            nonlocal external_bytes
+            copyfileobj(reader, writer, length)
+            if external_bytes is None:
+                workbook = load_workbook(path)
+                workbook.active["H8"] = "外部新备注"
+                replacement = self.base / "external.xlsx"
+                workbook.save(replacement)
+                workbook.close()
+                replacement.replace(path)
+                external_bytes = path.read_bytes()
+
+        with patch("qt_app.services.excel_service.copyfileobj", side_effect=save_concurrently):
+            with self.assertRaisesRegex(OSError, "其他程序修改"):
+                self.excel.mark_executed([2])
+        self.assertEqual(path.read_bytes(), external_bytes)
+        self.assertIsNone(self.excel.sheet["F2"].value)
+        self.assertEqual(list(self.base.glob(".screenshot-word-*")), [])
+        self.excel.mark_executed([2])
+        saved = load_workbook(path)
+        try:
+            self.assertEqual(saved.active["H8"].value, "外部新备注")
+            self.assertEqual(saved.active["F2"].value, "已执行")
+        finally:
+            saved.close()
+
+    def test_changed_merged_result_layout_fails_before_replacing_source(self) -> None:
+        path = self.base / "changed_merge.xlsx"
+        make_workbook(path, [["登录", "成功", "步骤1", "", "", ""],
+                             [None, None, "步骤2", "", "", ""]])
+        self.excel.load(path, MAPPING)
+        workbook = load_workbook(path)
+        workbook.active.merge_cells("F2:F3")
+        workbook.save(path)
+        workbook.close()
+        original = path.read_bytes()
+        with self.assertRaisesRegex(ValueError, "合并单元格已变化"):
+            self.excel.mark_executed([3])
+        self.assertEqual(path.read_bytes(), original)
+        self.assertIsNone(self.excel.sheet["F3"].value)
+        self.assertEqual(list(self.base.glob(".screenshot-word-*")), [])
 
     def test_empty_and_whitespace_rows_are_skipped_before_previous_row_inheritance(self) -> None:
         path = self.base / "empty_rows.xlsx"

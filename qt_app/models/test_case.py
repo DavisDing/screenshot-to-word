@@ -14,6 +14,7 @@ class TestItem:
     step_name: str = ""
     step_description: str = ""
     expected_result: str = ""
+    sheet_name: str = ""
 
     @property
     def is_step(self) -> bool:

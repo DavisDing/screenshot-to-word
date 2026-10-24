@@ -8,12 +8,38 @@ on:
       - 'v*'
   pull_request:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release version (e.g. v0.0.37); leave empty to build artifacts only. Use the default branch for a release.'
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
 
 jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.metadata.outputs.version }}
+      release_tag: ${{ steps.metadata.outputs.release_tag }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Resolve build version and release intent
+        id: metadata
+        env:
+          BUILD_EVENT: ${{ github.event_name }}
+          BUILD_REF: ${{ github.ref }}
+          BUILD_SHA: ${{ github.sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          MANUAL_RELEASE_TAG: ${{ inputs.release_tag }}
+        run: python3 scripts/prepare_build.py
+
   build:
+    needs: prepare
     strategy:
       fail-fast: false
       matrix:
@@ -43,15 +69,8 @@ jobs:
       - name: Write application version
         shell: bash
         env:
-          BUILD_REF_TYPE: ${{ github.ref_type }}
-          BUILD_REF_NAME: ${{ github.ref_name }}
-          BUILD_SHA: ${{ github.sha }}
-        run: |
-          if [ "$BUILD_REF_TYPE" = "tag" ]; then
-            python scripts/write_build_version.py "$BUILD_REF_NAME"
-          else
-            python scripts/write_build_version.py "dev-${BUILD_SHA:0:7}"
-          fi
+          BUILD_VERSION: ${{ needs.prepare.outputs.version }}
+        run: python scripts/write_build_version.py "$BUILD_VERSION"
 
       - name: Syntax smoke test
         run: python -m compileall -q main.py qt_app scripts tests pyinstaller_hooks
@@ -94,12 +113,21 @@ jobs:
           if-no-files-found: error
 
   release:
-    needs: build
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [prepare, build]
+    if: needs.prepare.outputs.release_tag != ''
+    concurrency:
+      group: release-${{ needs.prepare.outputs.release_tag }}
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - name: Checkout release commit and tags
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+
       - name: Download Windows package
         uses: actions/download-artifact@v4
         with:
@@ -117,15 +145,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
           RELEASE_SHA: ${{ github.sha }}
-        run: |
-          test -s release-assets/DesktopTestTool-windows.zip
-          test -s release-assets/DesktopTestTool-macos.zip
-          gh release create "$RELEASE_TAG" \
-            release-assets/DesktopTestTool-windows.zip \
-            release-assets/DesktopTestTool-macos.zip \
-            --verify-tag \
-            --target "$RELEASE_SHA" \
-            --title "Release $RELEASE_TAG" \
-            --notes "Automated desktop release for Windows and macOS."
+        run: bash scripts/publish_release.sh
