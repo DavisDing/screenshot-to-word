@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from shutil import copyfileobj
 from tempfile import TemporaryDirectory
 import sys
 import unittest
@@ -418,20 +417,24 @@ class ExcelRegressionTests(unittest.TestCase):
         make_workbook(path, [["登录", "成功", "步骤1", "", "", ""]])
         self.excel.load(path, MAPPING)
         external_bytes = None
+        external = self.base / "external.xlsx"
+        workbook = load_workbook(path)
+        workbook.active["H8"] = "外部新备注"
+        workbook.save(external)
+        workbook.close()
+        original_stat = Path.stat
 
-        def save_concurrently(reader, writer, length):
+        def save_before_stat(current_path, *args, **kwargs):
             nonlocal external_bytes
-            copyfileobj(reader, writer, length)
-            if external_bytes is None:
-                workbook = load_workbook(path)
-                workbook.active["H8"] = "外部新备注"
-                replacement = self.base / "external.xlsx"
-                workbook.save(replacement)
-                workbook.close()
-                replacement.replace(path)
+            if current_path == path and external_bytes is None:
+                # Inject after ZIP reading closes its file handles, before the
+                # optimistic concurrency check. Windows prohibits replacing
+                # the source while it is still open during copyfileobj.
+                external.replace(path)
                 external_bytes = path.read_bytes()
+            return original_stat(current_path, *args, **kwargs)
 
-        with patch("qt_app.services.excel_service.copyfileobj", side_effect=save_concurrently):
+        with patch.object(Path, "stat", new=save_before_stat):
             with self.assertRaisesRegex(OSError, "其他程序修改"):
                 self.excel.mark_executed([2])
         self.assertEqual(path.read_bytes(), external_bytes)

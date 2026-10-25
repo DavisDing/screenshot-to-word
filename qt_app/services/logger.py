@@ -14,6 +14,7 @@ class AppLogger:
         self.log_file.parent.mkdir(parents=True, exist_ok=True)
         self.sink = sink
         self._lock = Lock()
+        self._closed = False
         self._handler = RotatingFileHandler(
             self.log_file, maxBytes=2 * 1024 * 1024, backupCount=3, encoding="utf-8"
         )
@@ -24,12 +25,15 @@ class AppLogger:
 
     def close(self) -> None:
         with self._lock:
+            self._closed = True
             self._handler.close()
 
     def log(self, message: str) -> None:
         timestamp = _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         line = f"[{timestamp}] {message}"
         with self._lock:
+            if self._closed:
+                return
             try:
                 self._handler.emit(logging.makeLogRecord({"msg": line, "args": ()}))
             except Exception:

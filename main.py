@@ -54,6 +54,8 @@ def main() -> int:
 
     # PySide routes uncaught slot exceptions through sys.excepthook; install the
     # thread hook as well so background callback failures reach the same log.
+    previous_exception_hook = sys.excepthook
+    previous_thread_hook = threading.excepthook
     sys.excepthook = report_unhandled
     threading.excepthook = lambda args: report_unhandled(args.exc_type, args.exc_value, args.exc_traceback)
 
@@ -68,6 +70,11 @@ def main() -> int:
         except Exception:
             pass
         return 1
+    finally:
+        sys.excepthook = previous_exception_hook
+        threading.excepthook = previous_thread_hook
+        logger.set_sink(None)
+        logger.close()
 
 
 if __name__ == "__main__":

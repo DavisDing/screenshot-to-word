@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import ExitStack
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import sys
@@ -24,9 +25,10 @@ def _make_image(path: Path) -> None:
 
 
 def test_excel_mapping_and_word_generation() -> None:
-    with TemporaryDirectory() as td:
+    with TemporaryDirectory() as td, ExitStack() as resources:
         base = Path(td)
         logger = AppLogger(base / "logs" / "output.log")
+        resources.callback(logger.close)
 
         xlsx = base / "cases.xlsx"
         wb = Workbook()
@@ -37,6 +39,7 @@ def test_excel_mapping_and_word_generation() -> None:
         wb.save(xlsx)
 
         excel = ExcelService(logger)
+        resources.callback(excel.close)
         preview = excel.preview(xlsx)
         assert preview.suggested_mapping["测试名称"] == "Case Name"
         assert preview.suggested_mapping["验证点"] == "Check Point"
@@ -63,9 +66,10 @@ def test_excel_mapping_and_word_generation() -> None:
 
 
 def test_merged_case_rows_execute_step_by_step() -> None:
-    with TemporaryDirectory() as td:
+    with TemporaryDirectory() as td, ExitStack() as resources:
         base = Path(td)
         logger = AppLogger(base / "logs" / "output.log")
+        resources.callback(logger.close)
         xlsx = base / "merged_steps.xlsx"
 
         wb = Workbook()
@@ -88,6 +92,7 @@ def test_merged_case_rows_execute_step_by_step() -> None:
         wb.save(xlsx)
 
         excel = ExcelService(logger)
+        resources.callback(excel.close)
         preview = excel.preview(xlsx)
         items = excel.load(xlsx, preview.suggested_mapping)
 
@@ -107,9 +112,10 @@ def test_merged_case_rows_execute_step_by_step() -> None:
 
 
 def test_word_checkpoint_is_not_duplicated() -> None:
-    with TemporaryDirectory() as td:
+    with TemporaryDirectory() as td, ExitStack() as resources:
         base = Path(td)
         logger = AppLogger(base / "logs" / "output.log")
+        resources.callback(logger.close)
         image_path = base / "shot.png"
         _make_image(image_path)
 

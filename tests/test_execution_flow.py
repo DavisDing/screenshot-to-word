@@ -45,7 +45,20 @@ class ExecutionFlowTests(unittest.TestCase):
         workbook.active = 1
         workbook.save(self.path)
         workbook.close()
-        self.window = MainWindow(self.base, AppLogger(self.base / "logs/output.log"))
+        self.logger = AppLogger(self.base / "logs/output.log")
+        self.addCleanup(self.logger.close)
+        # Static message boxes run a nested event loop, even on the offscreen
+        # platform. Never wait for human interaction in an automated test.
+        information = patch("qt_app.ui.control_window.QMessageBox.information")
+        self.information = information.start()
+        self.addCleanup(information.stop)
+        critical = patch(
+            "qt_app.ui.control_window.QMessageBox.critical",
+            side_effect=AssertionError("Unexpected error dialog"),
+        )
+        self.critical = critical.start()
+        self.addCleanup(critical.stop)
+        self.window = MainWindow(self.base, self.logger)
         self.addCleanup(self.cleanup_window)
 
     def cleanup_window(self):
@@ -55,6 +68,7 @@ class ExecutionFlowTests(unittest.TestCase):
             self.window.excel_service.close()
         self.window.close()
         self.app.processEvents()
+        self.logger.set_sink(None)
         self.app.setQuitOnLastWindowClosed(False)
 
     def test_mapping_execution_and_word_excel_persistence_cross_sheet_boundary(self):
@@ -117,6 +131,7 @@ class ExecutionFlowTests(unittest.TestCase):
         reports = list((self.base / "word_output").glob("*.docx"))
         self.assertEqual(len(reports), 2)
         self.assertTrue(all(len(Document(path).inline_shapes) == 1 for path in reports))
+        self.information.assert_called_once()
 
     def test_cancel_second_mapping_creates_no_execution_or_partial_writes(self):
         original = self.path.read_bytes()
