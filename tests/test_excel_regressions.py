@@ -511,8 +511,21 @@ class ExcelRegressionTests(unittest.TestCase):
             ["", "", "步骤3", "", "", "失败"],
         ])
         items = self.excel.load(path, MAPPING)
-        self.assertEqual([item.row_index for item in items], [3, 5])
+        # PASS is a business outcome, so this row remains pending too.
+        self.assertEqual([item.row_index for item in items], [2, 3, 5])
         self.assertTrue(all(item.case_name == "登录" and item.checkpoint == "成功" for item in items))
+
+    def test_business_result_values_remain_pending(self) -> None:
+        path = self.base / "business_results.xlsx"
+        make_workbook(path, [
+            ["登录", "登录成功", "步骤1", "", "", "成功"],
+            ["支付", "支付完成", "步骤1", "", "", "通过"],
+            ["退出", "退出成功", "步骤1", "", "", "pass"],
+            ["查询", "查询结果", "步骤1", "", "", "passed"],
+            ["注册", "注册成功", "步骤1", "", "", "已执行"],
+        ])
+        items = self.excel.load(path, MAPPING)
+        self.assertEqual([item.row_index for item in items], [2, 3, 4, 5])
 
 
 if __name__ == "__main__":

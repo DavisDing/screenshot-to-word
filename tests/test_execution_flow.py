@@ -94,6 +94,30 @@ class ExecutionFlowTests(unittest.TestCase):
             self.assertEqual(report.paragraphs[0].text, case)
             self.assertEqual(len(report.inline_shapes), 1)
 
+    def test_same_case_name_across_sheets_has_separate_word_reports(self):
+        workbook = load_workbook(self.path)
+        workbook["第一张"]["A2"] = "共同用例"
+        workbook["第二张"]["B2"] = "共同用例"
+        workbook.save(self.path)
+        workbook.close()
+        with patch("qt_app.ui.main_window.QFileDialog.getOpenFileName", return_value=(str(self.path), "")), \
+             patch.object(ExcelMappingDialog, "exec", return_value=QDialog.DialogCode.Accepted):
+            self.window.select_and_run()
+        panel = self.window.control_panel
+        image = self.base / "annotated.png"
+        Image.new("RGB", (80, 40), "blue").save(image)
+        panel.last_image = image
+        first = panel._current()
+        self.assertTrue(panel._save_current_result(first, image))
+        panel.finish_current()
+        panel.last_image = image
+        second = panel._current()
+        self.assertTrue(panel._save_current_result(second, image))
+        panel.finish_current()
+        reports = list((self.base / "word_output").glob("*.docx"))
+        self.assertEqual(len(reports), 2)
+        self.assertTrue(all(len(Document(path).inline_shapes) == 1 for path in reports))
+
     def test_cancel_second_mapping_creates_no_execution_or_partial_writes(self):
         original = self.path.read_bytes()
         with patch("qt_app.ui.main_window.QFileDialog.getOpenFileName", return_value=(str(self.path), "")), \

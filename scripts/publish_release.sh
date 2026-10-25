@@ -7,6 +7,15 @@ set -euo pipefail
 test -s release-assets/DesktopTestTool-windows.zip
 test -s release-assets/DesktopTestTool-macos.zip
 
+(
+  cd release-assets
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum DesktopTestTool-windows.zip DesktopTestTool-macos.zip > SHA256SUMS.txt
+  else
+    shasum -a 256 DesktopTestTool-windows.zip DesktopTestTool-macos.zip > SHA256SUMS.txt
+  fi
+)
+
 # An existing version must identify the exact commit used for both builds.
 if git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then
   if [ "$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")" != "$RELEASE_SHA" ]; then
@@ -18,6 +27,7 @@ fi
 gh release create "$RELEASE_TAG" \
   release-assets/DesktopTestTool-windows.zip \
   release-assets/DesktopTestTool-macos.zip \
+  release-assets/SHA256SUMS.txt \
   --target "$RELEASE_SHA" \
   --title "Release $RELEASE_TAG" \
   --notes "Automated desktop release for Windows and macOS."

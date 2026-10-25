@@ -9,3 +9,5 @@ package/
 icon.icns
 *.zip
 .DS_Store
+Temp/
+logs/*.log

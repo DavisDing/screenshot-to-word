@@ -51,6 +51,10 @@ class PublishReleaseTests(unittest.TestCase):
         self.assertEqual(arguments[:3], ["release", "create", "v0.0.37"])
         self.assertIn("release-assets/DesktopTestTool-windows.zip", arguments)
         self.assertIn("release-assets/DesktopTestTool-macos.zip", arguments)
+        self.assertIn("release-assets/SHA256SUMS.txt", arguments)
+        manifest = (self.base / "release-assets/SHA256SUMS.txt").read_text()
+        self.assertIn("DesktopTestTool-windows.zip", manifest)
+        self.assertIn("DesktopTestTool-macos.zip", manifest)
         self.assertEqual(arguments[arguments.index("--target") + 1], self.sha)
 
     def test_wrong_commit_tag_stops_before_publishing(self):

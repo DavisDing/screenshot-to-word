@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sys
+import threading
 import traceback
 from pathlib import Path
 
@@ -46,6 +47,15 @@ def main() -> int:
         app.setWindowIcon(icon)
     app.setStyleSheet(APP_QSS)
     logger = AppLogger(base_path / "logs" / "output.log")
+
+    def report_unhandled(exc_type, exc_value, exc_traceback) -> None:
+        details = "".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
+        logger.log("[未处理异常]\n" + details)
+
+    # PySide routes uncaught slot exceptions through sys.excepthook; install the
+    # thread hook as well so background callback failures reach the same log.
+    sys.excepthook = report_unhandled
+    threading.excepthook = lambda args: report_unhandled(args.exc_type, args.exc_value, args.exc_traceback)
 
     try:
         window = MainWindow(base_path, logger)

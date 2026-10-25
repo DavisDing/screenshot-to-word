@@ -15,6 +15,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from qt_app.services.logger import AppLogger
+from qt_app.services.screenshot_service import ScreenshotService
 from qt_app.services.word_service import WordService
 
 
@@ -25,12 +26,18 @@ class WordReportRegressionTests(unittest.TestCase):
         self.base = Path(self.temporary.name)
         self.output = self.base / "reports"
         self.logger = AppLogger(self.base / "output.log")
+        self.addCleanup(self.logger.close)
         self.image = self.base / "shot.png"
         Image.new("RGB", (40, 30), "white").save(self.image)
 
     def add_image(self, case_name: str, checkpoint: str = "验证点1") -> Path:
         # Every call constructs a service, as when the application is restarted.
         return WordService(self.output, self.logger).add_image(case_name, checkpoint, self.image)
+
+    def add_scoped_image(self, case_name: str, checkpoint: str, *, sheet_name: str, operation_id: str = "") -> Path:
+        return WordService(self.output, self.logger).add_image(
+            case_name, checkpoint, self.image, sheet_name=sheet_name, operation_id=operation_id,
+        )
 
     def legacy_report(self, filename: str, heading: str | None, identifier: str = "") -> Path:
         self.output.mkdir(exist_ok=True)
@@ -154,6 +161,59 @@ class WordReportRegressionTests(unittest.TestCase):
             self.assertEqual(len(Document(path).inline_shapes), 2)
         self.assertNotEqual(Document(paths[0]).core_properties.identifier,
                             Document(paths[1]).core_properties.identifier)
+
+    def test_same_case_on_different_sheets_uses_separate_reports(self) -> None:
+        first = self.add_scoped_image("登录/成功", "成功", sheet_name="Web")
+        second = self.add_scoped_image("登录/成功", "成功", sheet_name="API")
+        self.assertNotEqual(first, second)
+        self.assertEqual(len(Document(first).inline_shapes), 1)
+        self.assertEqual(len(Document(second).inline_shapes), 1)
+        ids = {Document(first).core_properties.identifier, Document(second).core_properties.identifier}
+        self.assertEqual(len(ids), 2)
+
+    def test_operation_id_makes_retry_idempotent_after_excel_failure(self) -> None:
+        path = self.add_scoped_image("登录", "成功", sheet_name="Web", operation_id="stable-operation")
+        retry = self.add_scoped_image("登录", "成功", sheet_name="Web", operation_id="stable-operation")
+        doc = Document(path)
+        self.assertEqual(path, retry)
+        self.assertEqual(len(doc.inline_shapes), 1)
+        self.assertEqual(doc.inline_shapes[0]._inline.docPr.get("descr"), "screenshot-to-word-entry:stable-operation")
+
+    def test_repeated_checkpoint_images_stay_before_next_checkpoint(self) -> None:
+        service = WordService(self.output, self.logger)
+        service.add_image("登录", "验证点1", self.image, "步骤1")
+        service.add_image("登录", "验证点2", self.image, "步骤2")
+        path = service.add_image("登录", "验证点1", self.image, "步骤3")
+        doc = Document(path)
+        text = [p.text for p in doc.paragraphs]
+        p1 = text.index("验证点：验证点1")
+        p2 = text.index("验证点：验证点2")
+        self.assertLess(p1, text.index("步骤3"))
+        self.assertLess(text.index("步骤3"), p2)
+        self.assertEqual(len(doc.inline_shapes), 3)
+
+    def test_inserted_image_width_fits_a4_default_text_area(self) -> None:
+        path = self.add_image("宽度")
+        width_emu = Document(path).inline_shapes[0].width
+        self.assertLessEqual(width_emu, int(5.6 * 914400))
+
+    def test_temp_cleanup_removes_only_stale_managed_pngs(self) -> None:
+        temp_dir = self.base / "Temp"
+        temp_dir.mkdir()
+        stale = temp_dir / "stale.png"
+        recent = temp_dir / "recent.png"
+        nested_dir = temp_dir / "nested"
+        nested_dir.mkdir()
+        nested = nested_dir / "keep.png"
+        for path in (stale, recent, nested):
+            path.write_bytes(b"image")
+        import os, time
+        os.utime(stale, (time.time() - 8 * 86400, time.time() - 8 * 86400))
+
+        ScreenshotService(temp_dir, self.logger)
+        self.assertFalse(stale.exists())
+        self.assertTrue(recent.exists())
+        self.assertTrue(nested.exists())
 
 
 if __name__ == "__main__":

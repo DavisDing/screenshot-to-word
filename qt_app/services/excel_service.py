@@ -18,7 +18,9 @@ from openpyxl.worksheet.worksheet import Worksheet
 from qt_app.models.test_case import TestItem
 from utils.excel_schema import FIELD_SPECS, STEP_HINT_FIELDS, suggest_column_mapping
 
-EXECUTED_STATUSES = {"已执行", "pass", "passed", "通过", "done", "completed", "完成", "成功"}
+# Business results (success/pass/failed) describe the outcome, not whether a
+# screenshot/report has been captured. Only explicit execution markers skip.
+EXECUTED_STATUSES = {"已执行", "executed"}
 ROLE_CASE = "测试名称"
 ROLE_CHECKPOINT = "验证点"
 ROLE_STEP_NAME = "步骤名称"

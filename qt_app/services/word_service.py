@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from tempfile import NamedTemporaryFile
 import unicodedata
 from pathlib import Path
 
@@ -14,37 +15,63 @@ class WordService:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.logger = logger
 
-    def add_image(self, case_name: str, checkpoint: str, image_path: Path, step_note: str = "") -> Path:
+    def add_image(
+        self, case_name: str, checkpoint: str, image_path: Path, step_note: str = "",
+        *, sheet_name: str = "", operation_id: str = "",
+    ) -> Path:
         # Lazy import: python-docx is only needed when the user actually finishes a screenshot.
         from docx import Document
-        from docx.shared import Inches
+        from docx.shared import Mm
 
-        doc_path, doc = self._resolve_report(case_name)
+        doc_path, doc = self._resolve_report(case_name, sheet_name=sheet_name)
         if doc is not None:
             self.logger.log(f"打开已有 Word 报告：{doc_path}")
         else:
             doc = Document()
             doc.add_heading(case_name, level=1)
             self.logger.log(f"创建 Word 报告：{doc_path}")
-        doc.core_properties.identifier = self._case_identifier(case_name)
+        identity = self._case_identifier(case_name) if not sheet_name else self._sheet_case_identifier(sheet_name, case_name)
+        doc.core_properties.identifier = identity
 
-        if checkpoint and not self._has_checkpoint(doc, checkpoint):
-            doc.add_paragraph(f"验证点：{checkpoint}")
+        marker = f"screenshot-to-word-entry:{operation_id}" if operation_id else ""
+        if marker and self._has_entry(doc, marker):
+            return doc_path
+
+        checkpoint_paragraph = self._find_checkpoint(doc, checkpoint) if checkpoint else None
+        if checkpoint and checkpoint_paragraph is None:
+            checkpoint_paragraph = doc.add_paragraph(f"验证点：{checkpoint}")
+        section_end = self._next_checkpoint_element(checkpoint_paragraph) if checkpoint_paragraph is not None else None
+        new_elements = []
         if step_note:
             for line in step_note.splitlines():
                 if line.strip():
-                    doc.add_paragraph(line.strip())
-        doc.add_picture(str(image_path), width=Inches(5.8))
-        doc.add_paragraph()
-        doc.save(str(doc_path))
+                    new_elements.append(doc.add_paragraph(line.strip())._p)
+        picture_paragraph = doc.add_paragraph()
+        inline_shape = picture_paragraph.add_run().add_picture(str(image_path), width=Mm(142.24))  # 5.6 in, within default A4 text width
+        if marker:
+            inline_shape._inline.docPr.set("descr", marker)
+        new_elements.append(picture_paragraph._p)
+        new_elements.append(doc.add_paragraph()._p)
+        if section_end is not None:
+            for element in new_elements:
+                section_end.addprevious(element)
+        temporary_path = None
+        try:
+            with NamedTemporaryFile(dir=self.output_dir, prefix=".screenshot-word-", suffix=".docx", delete=False) as temporary:
+                temporary_path = Path(temporary.name)
+            doc.save(str(temporary_path))
+            temporary_path.replace(doc_path)
+        finally:
+            if temporary_path is not None:
+                temporary_path.unlink(missing_ok=True)
         self.logger.log(f"截图已写入 Word：{doc_path}")
         return doc_path
 
-    def _resolve_report(self, case_name: str):
+    def _resolve_report(self, case_name: str, *, sheet_name: str = ""):
         from docx import Document
 
         base = self._safe_filename(case_name)
-        identity = self._case_identifier(case_name)
+        identity = self._case_identifier(case_name) if not sheet_name else self._sheet_case_identifier(sheet_name, case_name)
         digest = identity.rsplit(":", 1)[1][:12]
 
         def candidate(index: int) -> str:
@@ -82,6 +109,10 @@ class WordService:
             stored_identity = doc.core_properties.identifier
             if stored_identity:
                 matches_case = stored_identity == identity
+            elif sheet_name:
+                # Legacy reports have no sheet identity; do not guess ownership
+                # and accidentally append a different sheet's case to them.
+                matches_case = False
             else:
                 heading = next(
                     (p.text for p in doc.paragraphs if p.style and p.style.style_id == "Heading1"),
@@ -105,9 +136,31 @@ class WordService:
         digest = hashlib.sha256(case_name.encode("utf-8")).hexdigest()
         return f"screenshot-to-word:case-sha256:{digest}"
 
-    def _has_checkpoint(self, doc, checkpoint: str) -> bool:
+    @staticmethod
+    def _sheet_case_identifier(sheet_name: str, case_name: str) -> str:
+        digest = hashlib.sha256(f"{sheet_name}\0{case_name}".encode("utf-8")).hexdigest()
+        return f"screenshot-to-word:sheet-case-sha256:{digest}"
+
+    @staticmethod
+    def _has_entry(doc, marker: str) -> bool:
+        return any(shape._inline.docPr.get("descr") == marker for shape in doc.inline_shapes)
+
+    @staticmethod
+    def _find_checkpoint(doc, checkpoint: str):
         expected = f"验证点：{checkpoint}".strip()
-        return any(paragraph.text.strip() == expected for paragraph in doc.paragraphs)
+        return next((paragraph for paragraph in doc.paragraphs if paragraph.text.strip() == expected), None)
+
+    @classmethod
+    def _next_checkpoint_element(cls, paragraph):
+        if paragraph is None:
+            return None
+        element = paragraph._p.getnext()
+        while element is not None:
+            text = "".join(element.xpath(".//w:t/text()"))
+            if text.startswith("验证点："):
+                return element
+            element = element.getnext()
+        return None
 
     def _safe_filename(self, name: str) -> str:
         cleaned = INVALID_FILENAME_CHARS.sub("_", name).strip(" ._")

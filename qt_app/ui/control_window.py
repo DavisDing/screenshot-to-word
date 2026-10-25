@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import hashlib
 from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 from PySide6.QtCore import Qt, QTimer
@@ -53,6 +54,7 @@ class ControlWindow(QDialog):
         self.index = 0
         self.last_image: Optional[Path] = None
         self.current_saved = False
+        self._image_pending_cleanup = False
         self.field_rows: Dict[str, Tuple[QWidget, QLabel, QLabel]] = {}
         icon = app_icon()
         if not icon.isNull():
@@ -187,6 +189,17 @@ class ControlWindow(QDialog):
         return None
 
     def _refresh(self) -> None:
+        # A successfully persisted screenshot can be removed once moving on.
+        # Failed saves keep it available for a retry.
+        if self._image_pending_cleanup:
+            self._cleanup_current_image()
+        if self.last_image is not None and self.last_image.parent == self.screenshot_service.temp_dir:
+            try:
+                self.last_image.unlink(missing_ok=True)
+            except OSError as exc:
+                self.logger.log(f"[警告] 清理未保存临时截图失败：{self.last_image}：{exc}")
+            else:
+                self.last_image = None
         total = len(self.items)
         item = self._current()
         self.progress.setRange(0, max(total, 1))
@@ -255,7 +268,14 @@ class ControlWindow(QDialog):
 
     def _save_current_result(self, item: TestItem, image_path: Path) -> bool:
         try:
-            self.word_service.add_image(item.case_name, item.checkpoint, image_path, item.step_note())
+            image_digest = hashlib.sha256(image_path.read_bytes()).hexdigest()
+            operation_id = hashlib.sha256(
+                f"{item.sheet_name}\0{item.row_index}\0{item.case_name}\0{item.checkpoint}\0{image_digest}".encode("utf-8")
+            ).hexdigest()
+            self.word_service.add_image(
+                item.case_name, item.checkpoint, image_path, item.step_note(),
+                sheet_name=item.sheet_name, operation_id=operation_id,
+            )
             self.excel_service.mark_executed([item.row_index], sheet_name=item.sheet_name or None)
         except Exception as exc:
             QMessageBox.critical(self, "保存失败", str(exc))
@@ -263,6 +283,7 @@ class ControlWindow(QDialog):
             self.current_saved = False
             return False
         self.current_saved = True
+        self._image_pending_cleanup = image_path.parent == self.screenshot_service.temp_dir
         self.logger.log(f"[完成] 当前用例已自动写入 Word 并回写 Excel：{item.display_title}")
         return True
 
@@ -274,6 +295,7 @@ class ControlWindow(QDialog):
         if not self.current_saved:
             if not self._save_current_result(item, self.last_image):
                 return
+        self._cleanup_current_image()
         self.index += 1
         self._refresh()
 
@@ -281,8 +303,28 @@ class ControlWindow(QDialog):
         item = self._current()
         if item:
             self.logger.log(f"[跳过] {item.display_title}")
+        self._cleanup_current_image()
         self.index += 1
         self._refresh()
+
+    def _cleanup_current_image(self) -> None:
+        if self._image_pending_cleanup and self.last_image is not None:
+            try:
+                self.last_image.unlink(missing_ok=True)
+            except OSError as exc:
+                self.logger.log(f"[警告] 清理临时截图失败：{self.last_image}：{exc}")
+            else:
+                self._image_pending_cleanup = False
+                self.last_image = None
+
+    def reject(self) -> None:
+        self._cleanup_current_image()
+        if self.last_image is not None and self.last_image.parent == self.screenshot_service.temp_dir:
+            try:
+                self.last_image.unlink(missing_ok=True)
+            except OSError as exc:
+                self.logger.log(f"[警告] 清理临时截图失败：{self.last_image}：{exc}")
+        super().reject()
 
     def _finish_all(self) -> None:
         self.progress.setValue(len(self.items))
